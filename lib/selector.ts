@@ -242,16 +242,109 @@ export function cssModuleToken(cls: string): string | null {
   return words.pop() ?? null;
 }
 
+/** A `:has()` generalization matching more than this is treated as too broad. */
+const HAS_GENERALIZE_MAX = 400;
+/** Cap descendant scanning so picking a huge container stays responsive. */
+const HAS_SCAN_LIMIT = 250;
+
+/** tag + its classes (hashed/state always dropped; utilities optionally kept). */
+function tagWithClasses(el: Element, keepUtility: boolean): string {
+  const tag = el.tagName.toLowerCase();
+  const cls = Array.from(el.classList).filter(
+    (c) =>
+      !isHashedClass(c) &&
+      !isStateClass(c) &&
+      (keepUtility || !isUtilityClass(c)),
+  );
+  return cls.length ? `${tag}.${cls.map((c) => CSS.escape(c)).join(".")}` : tag;
+}
+
+/**
+ * Direct-child signatures - ideal for repeated rows of identical cells (e.g.
+ * `> div.relative.h-6.w-6` for a star-rating row). Cheap, so tried first. A
+ * class is required; a bare `> div` would match almost anything.
+ */
+function directChildPredicates(el: Element): string[] {
+  const out: string[] = [];
+  for (const kid of Array.from(el.children)) {
+    const sig = tagWithClasses(kid, true);
+    if (sig.includes(".") && !out.includes(`> ${sig}`)) out.push(`> ${sig}`);
+  }
+  return out;
+}
+
+/**
+ * Distinctive-descendant predicates: a stable data-attribute, a semantic class,
+ * or a recognizable icon color utility (fill-/stroke-/text-<color>-<n>). Uses a
+ * bounded breadth-first walk so a huge subtree doesn't stall the hover preview.
+ */
+function descendantPredicates(el: Element): string[] {
+  const out: string[] = [];
+  const push = (s: string) => {
+    if (!out.includes(s)) out.push(s);
+  };
+  const queue = Array.from(el.children);
+  let scanned = 0;
+  while (queue.length && scanned < HAS_SCAN_LIMIT) {
+    const d = queue.shift() as Element;
+    scanned++;
+    const dtag = d.tagName.toLowerCase();
+    for (const attr of d.getAttributeNames()) {
+      // Skip framework noise: Vue scope ids and transient headless-ui state.
+      if (
+        attr.startsWith("data-") &&
+        !/^data-(v-|headlessui|state$|open$|reactid)/.test(attr)
+      ) {
+        push(`[${attr}]`);
+      }
+    }
+    const sem = semanticClasses(d);
+    if (sem.length) push(`${dtag}.${sem.map((c) => CSS.escape(c)).join(".")}`);
+    for (const c of Array.from(d.classList)) {
+      if (/^(fill|stroke|text)-[a-z]+-\d{2,3}$/.test(c)) {
+        push(`${dtag}.${CSS.escape(c)}`);
+      }
+    }
+    for (const c of Array.from(d.children)) queue.push(c);
+  }
+  return out;
+}
+
+/**
+ * Try to generalize a utility-only element via `:has()`. Returns a selector
+ * that matches the picked element plus its siblings (2+), but not a page-wide
+ * swath, or null when no good content anchor exists. Direct-child signatures
+ * are tried before the costlier descendant scan.
+ */
+function hasGeneralization(el: Element): string | null {
+  const base = tagWithClasses(el, false); // usually just the bare tag
+  const tryPreds = (preds: string[]): string | null => {
+    for (const pred of preds) {
+      const sel = `${base}:has(${pred})`;
+      try {
+        if (!el.matches(sel)) continue;
+      } catch {
+        continue; // :has unsupported or malformed - skip
+      }
+      const n = matchCount(sel);
+      if (n >= 2 && n <= HAS_GENERALIZE_MAX) return sel;
+    }
+    return null;
+  };
+  return tryPreds(directChildPredicates(el)) ?? tryPreds(descendantPredicates(el));
+}
+
 /**
  * A broad, NON-unique selector that matches every element like this one - its
  * semantic classes (e.g. `.media-card-rating`), so one pick can blur a whole
  * grid. Falls back to a shared attribute, then a CSS-modules prefix match.
  *
- * When there's no meaningful shared anchor - e.g. a utility-class-only element
- * on a Tailwind site, where the only classes (`flex`, `col-span-4`) are shared
- * with unrelated siblings - a bare tag or those utilities would blur half the
- * page. So we fall back to a precise single-element selector; the user can
- * broaden it with `:has()` by hand if they want a whole set.
+ * When the element itself has no shared anchor - a utility-class-only element
+ * on a Tailwind site, where `flex`/`col-span-4` are shared with unrelated
+ * siblings - we infer a `:has()` selector from a distinctive descendant so a
+ * repeated set (review star rows, cards) still generalizes with one pick. Only
+ * if that fails too do we fall back to a precise single-element selector; the
+ * generated selector is shown in the toolbar, so the user can always tweak it.
  */
 export function generalizedSelector(el: Element): string {
   const classes = semanticClasses(el);
@@ -273,7 +366,7 @@ export function generalizedSelector(el: Element): string {
   if (tokens.length) {
     return tokens.map((t) => `[class*="${CSS.escape(t)}"]`).join("");
   }
-  return generateSelector(el);
+  return hasGeneralization(el) ?? generateSelector(el);
 }
 
 /** Selectors for the element and each of its ancestors (for the granularity walk). */
