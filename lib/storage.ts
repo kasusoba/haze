@@ -6,20 +6,14 @@ export interface HazeState {
   globalEnabled: boolean;
   /** hostKey -> true when the site is explicitly turned off (default: on). */
   siteDisabled: Record<string, boolean>;
-  /** hostKey -> user rules for that site. */
+  /** hostKey -> the user's rules for that site (the only rule store). */
   userRules: Record<string, Rule[]>;
-  /** community rule id -> true when disabled by the user. */
-  communityDisabled: Record<string, boolean>;
-  /** community rule id -> an edited version that replaces the bundled default. */
-  communityOverrides: Record<string, Rule>;
 }
 
 const DEFAULTS: HazeState = {
   globalEnabled: true,
   siteDisabled: {},
   userRules: {},
-  communityDisabled: {},
-  communityOverrides: {},
 };
 
 export async function loadState(): Promise<HazeState> {
@@ -41,27 +35,6 @@ export async function setSiteDisabled(
   await browser.storage.sync.set({ siteDisabled });
 }
 
-export async function setCommunityDisabled(
-  id: string,
-  disabled: boolean,
-): Promise<void> {
-  const { communityDisabled } = await loadState();
-  if (disabled) communityDisabled[id] = true;
-  else delete communityDisabled[id];
-  await browser.storage.sync.set({ communityDisabled });
-}
-
-/** Patch (or, with null, reset) a bundled community rule. */
-export async function setCommunityOverride(
-  id: string,
-  rule: Rule | null,
-): Promise<void> {
-  const { communityOverrides } = await loadState();
-  if (rule) communityOverrides[id] = rule;
-  else delete communityOverrides[id];
-  await browser.storage.sync.set({ communityOverrides });
-}
-
 export async function getUserRules(key: string): Promise<Rule[]> {
   const { userRules } = await loadState();
   return userRules[key] ?? [];
@@ -78,6 +51,21 @@ export async function addUserRule(key: string, rule: Rule): Promise<void> {
   const rules = await getUserRules(key);
   rules.push(rule);
   await setUserRules(key, rules);
+}
+
+/**
+ * Append example rules for a site, skipping any whose id is already present so
+ * re-adding is idempotent. Once added they are ordinary user rules.
+ */
+export async function addExampleRules(
+  key: string,
+  rules: Rule[],
+): Promise<void> {
+  const existing = await getUserRules(key);
+  const have = new Set(existing.map((r) => r.id));
+  const fresh = rules.filter((r) => !have.has(r.id));
+  if (!fresh.length) return;
+  await setUserRules(key, [...existing, ...fresh]);
 }
 
 // --- granted dynamic origins (storage.local; re-registered on startup) ---

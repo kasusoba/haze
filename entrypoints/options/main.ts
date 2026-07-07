@@ -1,32 +1,31 @@
 import { browser } from "wxt/browser";
-import { COMMUNITY_SITES } from "../../lib/community-rules";
-import { communityRuleId } from "../../lib/rules";
+import { COMMUNITY_SITES, type CommunitySite } from "../../lib/community-rules";
+import {
+  exampleRulesForSite,
+  exampleSiteKey,
+  isExampleSiteAdded,
+} from "../../lib/rules";
 import { isValidSelector } from "../../lib/selector";
 import {
+  addExampleRules,
   type HazeState,
   loadState,
-  setCommunityDisabled,
-  setCommunityOverride,
   setGlobalEnabled,
-  setSiteDisabled,
   setUserRules,
 } from "../../lib/storage";
-import {
-  DEFAULT_BG,
-  DEFAULT_INTENSITY,
-  type Effect,
-  type Reveal,
-  type Rule,
-} from "../../lib/types";
+import { type Effect, type Reveal, type Rule } from "../../lib/types";
 
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
+
+/** Community site ids currently expanded in the accordion (empty = all collapsed). */
+const expandedSites = new Set<string>();
 
 async function render() {
   const state = await loadState();
   renderGlobal(state);
   renderUser(state);
-  renderCommunity(state);
+  renderGallery(state);
   $("version").textContent = `v${browser.runtime.getManifest().version}`;
 }
 
@@ -76,71 +75,89 @@ function renderUser(state: HazeState) {
   }
 }
 
-function renderCommunity(state: HazeState) {
+/**
+ * The examples gallery: bundled sites shown as starting points. "Add" copies a
+ * site's rules into the user's own rules (where they can be edited or removed),
+ * so there's no separate always-on layer.
+ */
+function renderGallery(state: HazeState) {
   const root = $("community");
   root.innerHTML = "";
 
+  const toggleAll = $<HTMLButtonElement>("expand-all");
+  const syncToggleAll = () => {
+    const allExpanded = COMMUNITY_SITES.every((s) => expandedSites.has(s.id));
+    toggleAll.textContent = allExpanded ? "Collapse all" : "Expand all";
+  };
+  toggleAll.onclick = () => {
+    const expand = !COMMUNITY_SITES.every((s) => expandedSites.has(s.id));
+    for (const s of COMMUNITY_SITES) {
+      if (expand) expandedSites.add(s.id);
+      else expandedSites.delete(s.id);
+    }
+    for (const c of root.querySelectorAll(".site")) {
+      c.classList.toggle("collapsed", !expand);
+    }
+    syncToggleAll();
+  };
+  syncToggleAll();
+
   for (const site of COMMUNITY_SITES) {
-    const siteKey = site.hosts[0] as string;
+    const added = isExampleSiteAdded(site, state);
     const card = document.createElement("div");
-    card.className = "site";
+    card.className = expandedSites.has(site.id) ? "site" : "site collapsed";
 
     const head = document.createElement("div");
     head.className = "site-head";
-    const name = document.createElement("span");
-    name.className = "name";
+
+    const toggle = el<HTMLButtonElement>("button", "site-toggle");
+    toggle.type = "button";
+    const caret = el<HTMLSpanElement>("span", "caret");
+    caret.textContent = "▸";
+    const name = el<HTMLSpanElement>("span", "name");
     name.textContent = site.id;
-    head.append(
-      name,
-      switchEl(!state.siteDisabled[siteKey], (on) =>
-        setSiteDisabled(siteKey, !on),
-      ),
-    );
-    card.appendChild(head);
+    const count = el<HTMLSpanElement>("span", "count");
+    count.textContent = `${site.rules.length} rule${
+      site.rules.length === 1 ? "" : "s"
+    }`;
+    toggle.append(caret, name, count);
+    toggle.onclick = () => {
+      if (expandedSites.has(site.id)) expandedSites.delete(site.id);
+      else expandedSites.add(site.id);
+      card.classList.toggle("collapsed");
+      syncToggleAll();
+    };
 
-    site.rules.forEach((cr, index) => {
-      const id = communityRuleId(site.id, index);
-      const override = state.communityOverrides[id];
-      const draft: Rule = override
-        ? { ...override, id }
-        : {
-            id,
-            selector: cr.selector,
-            effect: cr.effect,
-            intensity: cr.intensity ?? DEFAULT_INTENSITY,
-            grayscale: cr.grayscale ?? false,
-            reveal: "hover",
-            bg: site.bg ?? DEFAULT_BG,
-            enabled: true,
-          };
-
-      const reset = el<HTMLButtonElement>("button", "reset");
-      reset.type = "button";
-      reset.textContent = "Reset";
-      reset.title = "Revert to the bundled default";
-      reset.onclick = async () => {
-        await setCommunityOverride(id, null);
+    const add = el<HTMLButtonElement>("button", "add");
+    add.type = "button";
+    if (added) {
+      add.textContent = "Added ✓";
+      add.classList.add("added");
+      add.disabled = true;
+    } else {
+      add.textContent = "Add to my rules";
+      add.title = "Copy these rules into your own rules";
+      add.onclick = async () => {
+        await addExampleRules(exampleSiteKey(site), exampleRulesForSite(site));
         render();
       };
+    }
 
-      let row: HTMLElement;
-      // Show Reset as soon as the rule is first edited, no page refresh needed.
-      const ensureReset = () => {
-        if (!reset.isConnected) row.append(reset);
-      };
-      row = ruleRow(draft, () => {
-        setCommunityOverride(id, { ...draft, enabled: true });
-        ensureReset();
-      });
-      row.append(
-        enableToggle(!state.communityDisabled[id], row, (on) =>
-          setCommunityDisabled(id, !on),
-        ),
-      );
-      if (override) ensureReset();
-      card.appendChild(row);
-    });
+    head.append(toggle, add);
+    card.appendChild(head);
 
+    const body = el<HTMLDivElement>("div", "site-body");
+    for (const cr of site.rules) {
+      const row = el<HTMLDivElement>("div", "example-rule");
+      const sel = el<HTMLSpanElement>("span", "sel");
+      sel.textContent = cr.selector;
+      sel.title = cr.selector;
+      const tag = el<HTMLSpanElement>("span", "tag");
+      tag.textContent = cr.effect;
+      row.append(sel, tag);
+      body.appendChild(row);
+    }
+    card.appendChild(body);
     root.appendChild(card);
   }
 }
@@ -244,8 +261,6 @@ async function exportRules() {
     haze: true,
     version: 1,
     userRules: state.userRules,
-    communityDisabled: state.communityDisabled,
-    communityOverrides: state.communityOverrides,
     siteDisabled: state.siteDisabled,
     globalEnabled: state.globalEnabled,
   };
@@ -275,8 +290,6 @@ async function importRules(file: File) {
   }
   await browser.storage.sync.set({
     userRules: data.userRules ?? {},
-    communityDisabled: data.communityDisabled ?? {},
-    communityOverrides: data.communityOverrides ?? {},
     siteDisabled: data.siteDisabled ?? {},
     ...(typeof data.globalEnabled === "boolean"
       ? { globalEnabled: data.globalEnabled }
@@ -322,19 +335,6 @@ function checkbox(
   input.onchange = () => onChange(input.checked);
   wrap.append(input, document.createTextNode(label));
   return wrap;
-}
-
-function switchEl(checked: boolean, onChange: (on: boolean) => void) {
-  const label = document.createElement("label");
-  label.className = "switch";
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = checked;
-  input.onchange = () => onChange(input.checked);
-  const slider = document.createElement("span");
-  slider.className = "slider";
-  label.append(input, slider);
-  return label;
 }
 
 $("export").addEventListener("click", exportRules);

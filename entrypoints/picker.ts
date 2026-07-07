@@ -245,15 +245,34 @@ function startPicker(onClose: () => void): void {
     return best;
   }
 
+  // Highlight boxes are position:fixed (viewport coords), so any scroll or
+  // resize leaves them stranded until we re-read the element's rect. Kept
+  // separate from refresh() so scroll handling stays geometry-only (cheap).
+  function positionBoxes(): void {
+    if (current) {
+      const rect = current.getBoundingClientRect();
+      box.style.left = `${rect.left}px`;
+      box.style.top = `${rect.top}px`;
+      box.style.width = `${rect.width}px`;
+      box.style.height = `${rect.height}px`;
+    }
+    if (pendingToken) {
+      const range = document.createRange();
+      range.setStart(pendingToken.node, pendingToken.start);
+      range.setEnd(pendingToken.node, pendingToken.end);
+      const r = range.getBoundingClientRect();
+      tbox.style.left = `${r.left}px`;
+      tbox.style.top = `${r.top}px`;
+      tbox.style.width = `${r.width}px`;
+      tbox.style.height = `${r.height}px`;
+    }
+  }
+
   function refresh(): void {
     current = resolveCurrent();
     box.classList.toggle("locked", locked);
     if (!current) return;
-    const rect = current.getBoundingClientRect();
-    box.style.left = `${rect.left}px`;
-    box.style.top = `${rect.top}px`;
-    box.style.width = `${rect.width}px`;
-    box.style.height = `${rect.height}px`;
+    positionBoxes();
     const selector =
       scopeSel.value === "similar"
         ? generalizedSelector(current)
@@ -435,15 +454,8 @@ function startPicker(onClose: () => void): void {
       return;
     }
     pendingToken = tok;
-    const range = document.createRange();
-    range.setStart(tok.node, tok.start);
-    range.setEnd(tok.node, tok.end);
-    const r = range.getBoundingClientRect();
     tbox.style.display = "block";
-    tbox.style.left = `${r.left}px`;
-    tbox.style.top = `${r.top}px`;
-    tbox.style.width = `${r.width}px`;
-    tbox.style.height = `${r.height}px`;
+    positionBoxes();
   }
 
   function finalizeTextToken(): void {
@@ -600,6 +612,8 @@ function startPicker(onClose: () => void): void {
     document.removeEventListener("mousemove", onMove, true);
     document.removeEventListener("keydown", onKey, true);
     document.removeEventListener("click", onClick, true);
+    window.removeEventListener("scroll", positionBoxes, true);
+    window.removeEventListener("resize", positionBoxes);
     document.documentElement.classList.remove(PREVIEW_CLASS);
     unwrapTextMatches(PREVIEW_TEXT_CLASS);
     clearPreviewAnchor();
@@ -636,4 +650,8 @@ function startPicker(onClose: () => void): void {
   document.addEventListener("mousemove", onMove, true);
   document.addEventListener("keydown", onKey, true);
   document.addEventListener("click", onClick, true);
+  // Capture so scrolls inside nested containers (which don't bubble) still
+  // keep the highlight glued to its element.
+  window.addEventListener("scroll", positionBoxes, true);
+  window.addEventListener("resize", positionBoxes);
 }

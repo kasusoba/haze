@@ -1,9 +1,14 @@
 import { browser } from "wxt/browser";
 import { hostKey, isInjectableUrl, originPattern } from "../../lib/host";
-import { communityRulesFor, communitySitesFor } from "../../lib/rules";
 import {
+  communitySitesFor,
+  exampleRulesForSite,
+  exampleSiteKey,
+  isExampleSiteAdded,
+} from "../../lib/rules";
+import {
+  addExampleRules,
   loadState,
-  setCommunityDisabled,
   setGlobalEnabled,
   setSiteDisabled,
   setUserRules,
@@ -79,38 +84,29 @@ async function pick(tabId: number, url: string, isCommunity: boolean) {
 
 async function renderRules(hostname: string, key: string) {
   const state = await loadState();
-  const builtIn = communityRulesFor(hostname, state);
   const user = state.userRules[key] ?? [];
   const root = $("rules");
   root.innerHTML = "";
 
-  if (!builtIn.length && !user.length) {
-    root.innerHTML =
-      '<p class="empty">No rules on this site yet. Hit “Pick element” above.</p>';
-    return;
-  }
-
-  if (builtIn.length) {
-    root.appendChild(heading("Built-in", builtIn.length));
-    const ul = document.createElement("ul");
-    for (const rule of builtIn) {
-      ul.appendChild(
-        ruleRow(rule, {
-          onToggle: async () => {
-            await setCommunityDisabled(rule.id, rule.enabled);
-            await renderRules(hostname, key);
-          },
-        }),
-      );
-    }
-    root.appendChild(ul);
+  // Discovery: this site has ready-made example rules the user hasn't added yet.
+  const example = communitySitesFor(hostname)[0];
+  if (example && !isExampleSiteAdded(example, state)) {
+    const add = document.createElement("button");
+    add.className = "add-examples";
+    add.textContent = `Add Haze's rules for ${example.id}`;
+    add.title = "Copy the built-in example rules for this site into your rules";
+    add.addEventListener("click", async () => {
+      await addExampleRules(exampleSiteKey(example), exampleRulesForSite(example));
+      await renderRules(hostname, key);
+    });
+    root.appendChild(add);
   }
 
   root.appendChild(heading("Your rules", user.length));
   if (!user.length) {
     const p = document.createElement("p");
     p.className = "empty";
-    p.textContent = "None yet.";
+    p.textContent = "None yet. Pick an element above, or add an example.";
     root.appendChild(p);
   } else {
     const ul = document.createElement("ul");

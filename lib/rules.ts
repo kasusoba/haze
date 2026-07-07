@@ -3,66 +3,62 @@ import { hostKey, hostMatchesSuffix } from "./host";
 import type { HazeState } from "./storage";
 import { DEFAULT_BG, DEFAULT_INTENSITY, type Rule } from "./types";
 
-/** A stable id for a bundled community rule: `<siteId>#<index>`. */
-export function communityRuleId(siteId: string, index: number): string {
-  return `${siteId}#${index}`;
+/** Stable id for a rule materialized from a built-in example: `example:<siteId>#<index>`. */
+export function exampleRuleId(siteId: string, index: number): string {
+  return `example:${siteId}#${index}`;
 }
 
+/** The bundled example sites whose hosts match `hostname`. */
 export function communitySitesFor(hostname: string): CommunitySite[] {
   return COMMUNITY_SITES.filter((site) =>
     site.hosts.some((suffix) => hostMatchesSuffix(hostname, suffix)),
   );
 }
 
-/**
- * Materialize bundled community rules for a host into full Rule objects,
- * including disabled ones (enabled reflects communityDisabled). For display.
- */
-export function communityRulesFor(hostname: string, state: HazeState): Rule[] {
-  const out: Rule[] = [];
-  for (const site of communitySitesFor(hostname)) {
-    site.rules.forEach((cr, index) => {
-      const id = communityRuleId(site.id, index);
-      const override = state.communityOverrides[id];
-      const base: Rule = override
-        ? { ...override, id }
-        : {
-            id,
-            selector: cr.selector,
-            effect: cr.effect,
-            intensity: cr.intensity ?? DEFAULT_INTENSITY,
-            grayscale: cr.grayscale ?? false,
-            reveal: "hover",
-            bg: site.bg ?? DEFAULT_BG,
-            text: cr.text,
-            enabled: true,
-          };
-      // enable state is tracked separately from the edit, so they never desync
-      out.push({ ...base, enabled: !state.communityDisabled[id] });
-    });
-  }
-  return out;
+/** hostKey the example rules for a site are stored under when added. */
+export function exampleSiteKey(site: CommunitySite): string {
+  return hostKey(site.hosts[0] ?? "");
 }
 
-/** Whether a bundled community rule has been edited from its default. */
-export function isCommunityOverridden(id: string, state: HazeState): boolean {
-  return id in state.communityOverrides;
+/** Materialize a site's examples into full Rule objects (for preview / adding). */
+export function exampleRulesForSite(site: CommunitySite): Rule[] {
+  return site.rules.map((cr, index) => ({
+    id: exampleRuleId(site.id, index),
+    selector: cr.selector,
+    effect: cr.effect,
+    intensity: cr.intensity ?? DEFAULT_INTENSITY,
+    grayscale: cr.grayscale ?? false,
+    reveal: "hover" as const,
+    bg: site.bg ?? DEFAULT_BG,
+    text: cr.text,
+    enabled: true,
+  }));
+}
+
+/** True when every one of a site's example rules is already in the user's rules. */
+export function isExampleSiteAdded(
+  site: CommunitySite,
+  state: HazeState,
+): boolean {
+  const existing = new Set(
+    (state.userRules[exampleSiteKey(site)] ?? []).map((r) => r.id),
+  );
+  return site.rules.every((_, index) =>
+    existing.has(exampleRuleId(site.id, index)),
+  );
 }
 
 export interface EffectiveRules {
   rules: Rule[];
-  /** Default scratchcard background, derived from the matching community site. */
+  /** Default scratchcard background (per-rule `bg` overrides this). */
   defaultBg: string;
 }
 
-/** All rules (community + user) that apply to a host, with disabled ones dropped. */
+/** The rules that apply to a host: the user's own, minus disabled ones. */
 export function effectiveRulesFor(
   hostname: string,
   state: HazeState,
 ): EffectiveRules {
-  const community = communityRulesFor(hostname, state);
   const user = state.userRules[hostKey(hostname)] ?? [];
-  const site = communitySitesFor(hostname)[0];
-  const all = [...community, ...user].filter((r) => r.enabled);
-  return { rules: all, defaultBg: site?.bg ?? DEFAULT_BG };
+  return { rules: user.filter((r) => r.enabled), defaultBg: DEFAULT_BG };
 }

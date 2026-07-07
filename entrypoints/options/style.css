@@ -103,6 +103,85 @@ h2 {
   font-family: ui-monospace, monospace;
   color: var(--text);
 }
+.site.collapsed .site-head {
+  margin-bottom: 0;
+}
+/* examples gallery: "Add to my rules" + read-only rule previews */
+.site-head .add {
+  margin-left: auto;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.site-head .add:hover {
+  background: #f4ad53;
+}
+.site-head .add.added {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: default;
+}
+.example-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.example-rule .sel {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: #cabfae;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.example-rule .tag {
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.site.collapsed .site-body {
+  display: none;
+}
+.site-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+}
+.site-toggle .caret {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+.site:not(.collapsed) .site-toggle .caret {
+  transform: rotate(90deg);
+}
+.site-toggle .count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
 .rule {
   display: flex;
   align-items: center;
