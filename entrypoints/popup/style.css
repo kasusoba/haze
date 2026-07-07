@@ -176,22 +176,6 @@ li button.del:hover {
   font-style: italic;
 }
 
-.add-examples {
-  width: 100%;
-  margin-bottom: 12px;
-  padding: 9px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
-  border-radius: 8px;
-  cursor: pointer;
-}
-.add-examples:hover {
-  border-color: var(--accent);
-}
-
 footer {
   padding: 10px 14px;
   border-top: 1px solid var(--line);

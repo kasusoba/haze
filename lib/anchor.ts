@@ -57,7 +57,7 @@ export function anchorMatches(selector: string, label: string): Element[] {
 /**
  * Marker class the engine assigns to a rule's anchored matches, so the CSS
  * pipeline can target them by a plain class. Sanitized to a CSS-safe token
- * because rule ids include `#` (community) or UUID hyphens.
+ * because rule ids can include colons (seeded defaults) or UUID hyphens.
  */
 export function anchorClass(ruleId: string): string {
   return `haze-anchor-${ruleId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;

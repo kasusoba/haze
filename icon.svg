@@ -1,0 +1,5 @@
+<!-- Haze mark (◐) — design source for public/icon/*.png (scripts/make-icons.mjs). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <circle cx="64" cy="64" r="47.7" stroke="#f0a23c" stroke-width="14.1" />
+  <path d="M64 16.3 A47.7 47.7 0 0 0 64 111.7 Z" fill="#f0a23c" />
+</svg>

@@ -1,7 +1,7 @@
 import { browser } from "wxt/browser";
 import { defineContentScript } from "wxt/utils/define-content-script";
 import { anchorClass, anchorMatches } from "../lib/anchor";
-import { COMMUNITY_MATCHES } from "../lib/community-hosts";
+import { GOOGLE_SEARCH_MATCHES } from "../lib/defaults";
 import {
   ACTIVE_CLASS,
   allSelectorParts,
@@ -20,11 +20,11 @@ import type { Rule } from "../lib/types";
 const STYLE_ID = "haze-style";
 const INIT_FLAG = "__hazeEngineInit";
 
-// Statically registered on the bundled community sites; also injected at runtime
-// (same file) on user-granted origins by the background. Guard against running
-// twice on a page that gets both.
+// Statically registered on Google Search (where the default rule lives); also
+// injected at runtime (same file) on user-granted origins by the background.
+// Guard against running twice on a page that gets both.
 export default defineContentScript({
-  matches: COMMUNITY_MATCHES,
+  matches: GOOGLE_SEARCH_MATCHES,
   runAt: "document_start",
   allFrames: false,
   main() {

@@ -54,10 +54,10 @@ export async function addUserRule(key: string, rule: Rule): Promise<void> {
 }
 
 /**
- * Append example rules for a site, skipping any whose id is already present so
- * re-adding is idempotent. Once added they are ordinary user rules.
+ * Append rules for a site, skipping any whose id is already present so the call
+ * is idempotent (used to seed the default rule without clobbering user edits).
  */
-export async function addExampleRules(
+export async function addRulesIfAbsent(
   key: string,
   rules: Rule[],
 ): Promise<void> {

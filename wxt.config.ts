@@ -1,5 +1,5 @@
 import { defineConfig } from "wxt";
-import { COMMUNITY_MATCHES } from "./lib/community-hosts";
+import { GOOGLE_SEARCH_MATCHES } from "./lib/defaults";
 
 // See docs/DESIGN.md for the full architecture.
 export default defineConfig({
@@ -10,10 +10,11 @@ export default defineConfig({
     name: "Haze",
     description:
       "Blur, hide, or scratchcard anything on any website. Toggle it all off in one click, reveal on hover.",
-    // Bundled community sites are granted at install (modest prompt).
-    // Everything else is requested per-site at pick time via optional perms.
+    // Google Search is granted at install for the one built-in rule (modest
+    // prompt). Everything else is requested per-site at pick time via optional
+    // perms.
     permissions: ["storage", "scripting", "activeTab"],
-    host_permissions: COMMUNITY_MATCHES,
+    host_permissions: GOOGLE_SEARCH_MATCHES,
     optional_host_permissions: ["*://*/*"],
     action: {},
   },

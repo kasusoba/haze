@@ -1,16 +1,10 @@
 import { browser } from "wxt/browser";
-import { COMMUNITY_SITES, type CommunitySite } from "../../lib/community-rules";
-import {
-  exampleRulesForSite,
-  exampleSiteKey,
-  isExampleSiteAdded,
-} from "../../lib/rules";
 import { isValidSelector } from "../../lib/selector";
 import {
-  addExampleRules,
   type HazeState,
   loadState,
   setGlobalEnabled,
+  setSiteDisabled,
   setUserRules,
 } from "../../lib/storage";
 import { type Effect, type Reveal, type Rule } from "../../lib/types";
@@ -18,14 +12,13 @@ import { type Effect, type Reveal, type Rule } from "../../lib/types";
 const $ = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 
-/** Community site ids currently expanded in the accordion (empty = all collapsed). */
+/** Site host-keys whose rule card is expanded (empty = all collapsed). */
 const expandedSites = new Set<string>();
 
 async function render() {
   const state = await loadState();
   renderGlobal(state);
   renderUser(state);
-  renderGallery(state);
   $("version").textContent = `v${browser.runtime.getManifest().version}`;
 }
 
@@ -35,20 +28,74 @@ function renderGlobal(state: HazeState) {
   g.onchange = () => setGlobalEnabled(g.checked);
 }
 
+/**
+ * Your rules, grouped per site as a collapsible card with a whole-site on/off
+ * switch. Expand a card to edit or remove individual rules.
+ */
 function renderUser(state: HazeState) {
   const root = $("user");
   root.innerHTML = "";
   const keys = Object.keys(state.userRules).sort();
 
+  const toggleAll = $<HTMLButtonElement>("expand-all");
+  const allExpanded = () =>
+    keys.length > 0 && keys.every((k) => expandedSites.has(k));
+  const syncToggleAll = () => {
+    toggleAll.disabled = keys.length === 0;
+    toggleAll.textContent = allExpanded() ? "Collapse all" : "Expand all";
+  };
+  toggleAll.onclick = () => {
+    const expand = !allExpanded();
+    for (const k of keys) {
+      if (expand) expandedSites.add(k);
+      else expandedSites.delete(k);
+    }
+    for (const c of root.querySelectorAll(".site")) {
+      c.classList.toggle("collapsed", !expand);
+    }
+    syncToggleAll();
+  };
+  syncToggleAll();
+
   if (!keys.length) {
     root.innerHTML =
-      '<p class="empty">No custom rules yet. Open any site, click the Haze toolbar icon, and pick an element.</p>';
+      '<p class="empty">No rules yet. Open any site, click the Haze toolbar icon, and pick an element.</p>';
     return;
   }
 
   for (const key of keys) {
     const rules = state.userRules[key] ?? [];
-    const card = siteCard(key);
+    const card = document.createElement("div");
+    card.className = expandedSites.has(key) ? "site" : "site collapsed";
+    if (state.siteDisabled[key]) card.classList.add("site-off");
+
+    const head = document.createElement("div");
+    head.className = "site-head";
+
+    const toggle = el<HTMLButtonElement>("button", "site-toggle");
+    toggle.type = "button";
+    const name = el<HTMLSpanElement>("span", "name");
+    name.textContent = key;
+    const count = el<HTMLSpanElement>("span", "count");
+    count.textContent = `${rules.length} rule${rules.length === 1 ? "" : "s"}`;
+    toggle.append(caretIcon(), name, count);
+    toggle.onclick = () => {
+      if (expandedSites.has(key)) expandedSites.delete(key);
+      else expandedSites.add(key);
+      card.classList.toggle("collapsed");
+      syncToggleAll();
+    };
+
+    head.append(
+      toggle,
+      switchEl(!state.siteDisabled[key], (on) => {
+        setSiteDisabled(key, !on);
+        card.classList.toggle("site-off", !on);
+      }),
+    );
+    card.appendChild(head);
+
+    const body = el<HTMLDivElement>("div", "site-body");
     for (const rule of rules) {
       const row = ruleRow(rule, () => setUserRules(key, rules));
       const del = el<HTMLButtonElement>("button", "del");
@@ -62,99 +109,16 @@ function renderUser(state: HazeState) {
         );
         render();
       };
-      row.append(
+      // Row-level actions, pinned top-right so ✕ never wraps away.
+      const actions = el<HTMLDivElement>("div", "rule-actions");
+      actions.append(
         enableToggle(rule.enabled, row, (on) => {
           rule.enabled = on;
           setUserRules(key, rules);
         }),
+        del,
       );
-      row.append(del);
-      card.appendChild(row);
-    }
-    root.appendChild(card);
-  }
-}
-
-/**
- * The examples gallery: bundled sites shown as starting points. "Add" copies a
- * site's rules into the user's own rules (where they can be edited or removed),
- * so there's no separate always-on layer.
- */
-function renderGallery(state: HazeState) {
-  const root = $("community");
-  root.innerHTML = "";
-
-  const toggleAll = $<HTMLButtonElement>("expand-all");
-  const syncToggleAll = () => {
-    const allExpanded = COMMUNITY_SITES.every((s) => expandedSites.has(s.id));
-    toggleAll.textContent = allExpanded ? "Collapse all" : "Expand all";
-  };
-  toggleAll.onclick = () => {
-    const expand = !COMMUNITY_SITES.every((s) => expandedSites.has(s.id));
-    for (const s of COMMUNITY_SITES) {
-      if (expand) expandedSites.add(s.id);
-      else expandedSites.delete(s.id);
-    }
-    for (const c of root.querySelectorAll(".site")) {
-      c.classList.toggle("collapsed", !expand);
-    }
-    syncToggleAll();
-  };
-  syncToggleAll();
-
-  for (const site of COMMUNITY_SITES) {
-    const added = isExampleSiteAdded(site, state);
-    const card = document.createElement("div");
-    card.className = expandedSites.has(site.id) ? "site" : "site collapsed";
-
-    const head = document.createElement("div");
-    head.className = "site-head";
-
-    const toggle = el<HTMLButtonElement>("button", "site-toggle");
-    toggle.type = "button";
-    const caret = el<HTMLSpanElement>("span", "caret");
-    caret.textContent = "▸";
-    const name = el<HTMLSpanElement>("span", "name");
-    name.textContent = site.id;
-    const count = el<HTMLSpanElement>("span", "count");
-    count.textContent = `${site.rules.length} rule${
-      site.rules.length === 1 ? "" : "s"
-    }`;
-    toggle.append(caret, name, count);
-    toggle.onclick = () => {
-      if (expandedSites.has(site.id)) expandedSites.delete(site.id);
-      else expandedSites.add(site.id);
-      card.classList.toggle("collapsed");
-      syncToggleAll();
-    };
-
-    const add = el<HTMLButtonElement>("button", "add");
-    add.type = "button";
-    if (added) {
-      add.textContent = "Added ✓";
-      add.classList.add("added");
-      add.disabled = true;
-    } else {
-      add.textContent = "Add to my rules";
-      add.title = "Copy these rules into your own rules";
-      add.onclick = async () => {
-        await addExampleRules(exampleSiteKey(site), exampleRulesForSite(site));
-        render();
-      };
-    }
-
-    head.append(toggle, add);
-    card.appendChild(head);
-
-    const body = el<HTMLDivElement>("div", "site-body");
-    for (const cr of site.rules) {
-      const row = el<HTMLDivElement>("div", "example-rule");
-      const sel = el<HTMLSpanElement>("span", "sel");
-      sel.textContent = cr.selector;
-      sel.title = cr.selector;
-      const tag = el<HTMLSpanElement>("span", "tag");
-      tag.textContent = cr.effect;
-      row.append(sel, tag);
+      row.append(actions);
       body.appendChild(row);
     }
     card.appendChild(body);
@@ -162,10 +126,35 @@ function renderGallery(state: HazeState) {
   }
 }
 
-/** A row of editable controls bound to `rule`; `onChange` persists after edits. */
+/** Heroicons mini chevron-right; CSS rotates it when the card is expanded. */
+function caretIcon(): SVGSVGElement {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "caret");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("fill-rule", "evenodd");
+  path.setAttribute("clip-rule", "evenodd");
+  path.setAttribute(
+    "d",
+    "M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z",
+  );
+  svg.appendChild(path);
+  return svg;
+}
+
+/**
+ * A row of editable controls bound to `rule`; `onChange` persists after edits.
+ * The fields (selector, label, effect…) live in a `.rule-fields` zone that
+ * wraps freely; the caller appends row-level actions (on/delete) after it, and
+ * CSS pins those to the top-right so they never wrap away.
+ */
 function ruleRow(rule: Rule, onChange: () => void): HTMLElement {
   const row = document.createElement("div");
   row.className = `rule${rule.enabled ? "" : " off"}`;
+  const fields = el<HTMLDivElement>("div", "rule-fields");
 
   const sel = el<HTMLInputElement>("input", "sel");
   sel.value = rule.selector;
@@ -215,9 +204,9 @@ function ruleRow(rule: Rule, onChange: () => void): HTMLElement {
     onChange();
   });
 
-  row.append(sel);
-  if (labelEl) row.append(labelEl);
-  row.append(
+  fields.append(sel);
+  if (labelEl) fields.append(labelEl);
+  fields.append(
     effect,
     intensity,
     reveal,
@@ -226,20 +215,23 @@ function ruleRow(rule: Rule, onChange: () => void): HTMLElement {
       onChange();
     }),
   );
+  row.append(fields);
   return row;
 }
 
-function siteCard(title: string): HTMLElement {
-  const card = document.createElement("div");
-  card.className = "site";
-  const head = document.createElement("div");
-  head.className = "site-head";
-  const name = document.createElement("span");
-  name.className = "name";
-  name.textContent = title;
-  head.appendChild(name);
-  card.appendChild(head);
-  return card;
+/** A pill on/off switch (whole-site enable). */
+function switchEl(
+  checked: boolean,
+  onChange: (on: boolean) => void,
+): HTMLLabelElement {
+  const label = el<HTMLLabelElement>("label", "switch");
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  input.onchange = () => onChange(input.checked);
+  const slider = el<HTMLSpanElement>("span", "slider");
+  label.append(input, slider);
+  return label;
 }
 
 function enableToggle(

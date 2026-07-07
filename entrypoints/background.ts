@@ -1,10 +1,11 @@
 import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
+import { DEFAULT_HOST_KEY, defaultRules, isBuiltinHost } from "../lib/defaults";
 import { hostKey, originPattern } from "../lib/host";
 import type { CreateRuleResponse, HazeMessage } from "../lib/messages";
-import { communitySitesFor } from "../lib/rules";
 import {
   addGrantedOrigin,
+  addRulesIfAbsent,
   addUserRule,
   getGrantedOrigins,
   loadState,
@@ -12,6 +13,7 @@ import {
 import { DEFAULT_BG, type Rule } from "../lib/types";
 
 const ENGINE_FILE = "/content-scripts/engine.js";
+const SEEDED_KEY = "defaultsSeeded";
 
 // Maps the original per-site toggle keys to the new site keys. Old value `true`
 // meant "show ratings" (blur off) -> new siteDisabled[key] = true.
@@ -29,6 +31,7 @@ const LEGACY_KEYS: Record<string, string> = {
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(async () => {
     await migrateLegacy();
+    await seedDefaults();
     await reRegisterDynamic();
   });
   browser.runtime.onStartup.addListener(reRegisterDynamic);
@@ -53,6 +56,14 @@ async function migrateLegacy(): Promise<void> {
     }
   }
   if (changed) await browser.storage.sync.set({ siteDisabled });
+}
+
+/** Seed the bundled default rule once. The flag makes a later deletion stick. */
+async function seedDefaults(): Promise<void> {
+  const got = await browser.storage.local.get(SEEDED_KEY);
+  if (got[SEEDED_KEY]) return;
+  await addRulesIfAbsent(DEFAULT_HOST_KEY, defaultRules());
+  await browser.storage.local.set({ [SEEDED_KEY]: true });
 }
 
 /** Re-register runtime content scripts for previously-granted custom origins. */
@@ -119,8 +130,9 @@ async function handleCreateRule(
   };
   await addUserRule(key, rule);
 
-  // Persist a runtime content script for non-bundled sites so it survives reloads.
-  if (communitySitesFor(hostname).length === 0) {
+  // Persist a runtime content script for non-builtin sites so it survives reloads.
+  // Google Search already has a static host permission + registered script.
+  if (!isBuiltinHost(hostname)) {
     const pattern = originPattern(url);
     await addGrantedOrigin(pattern);
     await registerForPattern(pattern, new Set());

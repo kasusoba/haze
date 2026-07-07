@@ -3,7 +3,7 @@
 export type Effect = "blur" | "scratchcard" | "both";
 export type Reveal = "hover" | "click";
 
-/** A single user-defined (or materialized community) rule. */
+/** A single rule the user owns (created via the picker or seeded as a default). */
 export interface Rule {
   id: string;
   /** CSS selector. May be a comma-separated group; the engine splits it. */

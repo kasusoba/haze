@@ -1,13 +1,7 @@
 import { browser } from "wxt/browser";
+import { isBuiltinHost } from "../../lib/defaults";
 import { hostKey, isInjectableUrl, originPattern } from "../../lib/host";
 import {
-  communitySitesFor,
-  exampleRulesForSite,
-  exampleSiteKey,
-  isExampleSiteAdded,
-} from "../../lib/rules";
-import {
-  addExampleRules,
   loadState,
   setGlobalEnabled,
   setSiteDisabled,
@@ -58,17 +52,17 @@ async function init() {
     setSiteDisabled(key, !siteInput.checked),
   );
 
-  const isCommunity = communitySitesFor(hostname).length > 0;
+  const noPrompt = isBuiltinHost(hostname);
   pickBtn.addEventListener("click", () =>
-    pick(tab.id as number, url, isCommunity),
+    pick(tab.id as number, url, noPrompt),
   );
 
-  await renderRules(hostname, key);
+  await renderRules(key);
 }
 
-async function pick(tabId: number, url: string, isCommunity: boolean) {
+async function pick(tabId: number, url: string, skipPrompt: boolean) {
   const pattern = originPattern(url);
-  if (!isCommunity) {
+  if (!skipPrompt) {
     const has = await browser.permissions.contains({ origins: [pattern] });
     if (!has) {
       const granted = await browser.permissions.request({ origins: [pattern] });
@@ -82,31 +76,17 @@ async function pick(tabId: number, url: string, isCommunity: boolean) {
   window.close();
 }
 
-async function renderRules(hostname: string, key: string) {
+async function renderRules(key: string) {
   const state = await loadState();
   const user = state.userRules[key] ?? [];
   const root = $("rules");
   root.innerHTML = "";
 
-  // Discovery: this site has ready-made example rules the user hasn't added yet.
-  const example = communitySitesFor(hostname)[0];
-  if (example && !isExampleSiteAdded(example, state)) {
-    const add = document.createElement("button");
-    add.className = "add-examples";
-    add.textContent = `Add Haze's rules for ${example.id}`;
-    add.title = "Copy the built-in example rules for this site into your rules";
-    add.addEventListener("click", async () => {
-      await addExampleRules(exampleSiteKey(example), exampleRulesForSite(example));
-      await renderRules(hostname, key);
-    });
-    root.appendChild(add);
-  }
-
   root.appendChild(heading("Your rules", user.length));
   if (!user.length) {
     const p = document.createElement("p");
     p.className = "empty";
-    p.textContent = "None yet. Pick an element above, or add an example.";
+    p.textContent = "None yet. Pick an element above to add one.";
     root.appendChild(p);
   } else {
     const ul = document.createElement("ul");
@@ -116,14 +96,14 @@ async function renderRules(hostname: string, key: string) {
           onToggle: async () => {
             rule.enabled = !rule.enabled;
             await setUserRules(key, user);
-            await renderRules(hostname, key);
+            await renderRules(key);
           },
           onDelete: async () => {
             await setUserRules(
               key,
               user.filter((r) => r.id !== rule.id),
             );
-            await renderRules(hostname, key);
+            await renderRules(key);
           },
         }),
       );

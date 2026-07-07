@@ -106,53 +106,12 @@ h2 {
 .site.collapsed .site-head {
   margin-bottom: 0;
 }
-/* examples gallery: "Add to my rules" + read-only rule previews */
-.site-head .add {
-  margin-left: auto;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border: 0;
-  border-radius: 6px;
-  padding: 5px 11px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.site-head .add:hover {
-  background: #f4ad53;
-}
-.site-head .add.added {
-  background: none;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  cursor: default;
-}
-.example-rule {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 0;
-  border-top: 1px solid var(--line);
-}
-.example-rule .sel {
-  flex: 1;
-  min-width: 0;
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  color: #cabfae;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.example-rule .tag {
-  font-size: 10px;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 1px 6px;
-}
 .site.collapsed .site-body {
   display: none;
+}
+.site-off .site-head .name,
+.site-off .site-head .count {
+  opacity: 0.5;
 }
 .site-toggle {
   display: flex;
@@ -170,12 +129,17 @@ h2 {
   font: inherit;
 }
 .site-toggle .caret {
+  flex: none;
+  width: 18px;
+  height: 18px;
   color: var(--muted);
-  font-size: 12px;
   transition: transform 0.15s ease;
 }
 .site:not(.collapsed) .site-toggle .caret {
   transform: rotate(90deg);
+}
+.site-toggle:hover .caret {
+  color: var(--text);
 }
 .site-toggle .count {
   color: var(--muted);
@@ -184,11 +148,27 @@ h2 {
 }
 .rule {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 8px 0;
   border-top: 1px solid var(--line);
+}
+/* The editable fields wrap freely inside their own zone... */
+.rule-fields {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 8px;
+}
+/* ...while on/delete stay a fixed cluster pinned to the top-right. */
+.rule-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
 }
 .rule .sel {
   flex: 1 1 240px;
@@ -274,28 +254,6 @@ h2 {
 }
 .rule .del:hover {
   color: var(--danger);
-}
-.rule .tag {
-  font-size: 10px;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 1px 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.rule .reset {
-  font-size: 11px;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  padding: 3px 8px;
-  cursor: pointer;
-}
-.rule .reset:hover {
-  color: var(--text);
-  border-color: var(--muted);
 }
 .rule .sel.invalid {
   border-color: var(--danger);
