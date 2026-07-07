@@ -83,9 +83,48 @@ export function isStateClass(cls: string): boolean {
   return false;
 }
 
-function stableClasses(el: Element): string[] {
+// Bare atomic-CSS/Tailwind utilities (no value suffix).
+const UTILITY_WORDS = new Set([
+  "flex", "grid", "block", "inline", "inline-flex", "inline-block",
+  "inline-grid", "contents", "hidden", "table", "flow-root", "flex-row",
+  "flex-col", "flex-row-reverse", "flex-col-reverse", "flex-wrap",
+  "flex-nowrap", "flex-wrap-reverse", "grow", "shrink", "grow-0", "shrink-0",
+  "flex-1", "flex-auto", "flex-initial", "flex-none", "absolute", "relative",
+  "fixed", "sticky", "static", "container", "truncate", "uppercase",
+  "lowercase", "capitalize", "normal-case", "italic", "not-italic",
+  "underline", "overline", "line-through", "no-underline", "antialiased",
+  "transform", "transform-gpu", "transform-none", "transition",
+  "transition-none", "isolate", "group", "peer", "sr-only", "border",
+  "rounded", "shadow", "ring", "outline", "appearance-none", "visible",
+  "invisible", "collapse", "overflow-hidden", "overflow-auto",
+  "overflow-visible", "overflow-scroll", "italic",
+]);
+
+// Utility roots that take a `-value` suffix (spacing, sizing, color, grid…).
+const UTILITY_PREFIX =
+  /^-?(?:m[trblxyse]?|p[trblxyse]?|space-[xy]|gap|gap-[xy]|w|h|min-w|max-w|min-h|max-h|size|basis|top|right|bottom|left|start|end|inset|inset-[xy]|col|row|col-span|col-start|col-end|row-span|row-start|row-end|grid-cols|grid-rows|order|text|font|leading|tracking|indent|align|whitespace|list|line-clamp|bg|from|via|to|fill|stroke|border|ring|divide|shadow|accent|caret|decoration|placeholder|outline|opacity|blur|brightness|contrast|grayscale|saturate|rounded|justify|items|self|content|place|translate|translate-x|translate-y|scale|rotate|skew|origin|duration|delay|ease|animate|z|cursor|pointer-events|select|overflow|object|aspect|columns|scroll|snap|will-change|backdrop|antialias)-/;
+
+/**
+ * Layout/style utility class (Tailwind, Tachyons, etc.)? These describe how an
+ * element looks, not what it *is*, and the same utilities appear on unrelated
+ * elements all over the page - so anchoring a selector on them makes it match
+ * far more than the picked element. We drop them and lean on structure instead.
+ */
+export function isUtilityClass(cls: string): boolean {
+  // A variant prefix (lg:, hover:, dark:, md:, group-hover:…) is always utility.
+  if (cls.includes(":")) return true;
+  const c = cls.toLowerCase();
+  if (UTILITY_WORDS.has(c)) return true;
+  return UTILITY_PREFIX.test(c);
+}
+
+/**
+ * Classes usable as a meaningful anchor: not hashed, not transient state, and
+ * not a shared layout utility. These are the ones worth putting in a selector.
+ */
+function semanticClasses(el: Element): string[] {
   return Array.from(el.classList).filter(
-    (c) => !isHashedClass(c) && !isStateClass(c),
+    (c) => !isHashedClass(c) && !isStateClass(c) && !isUtilityClass(c),
   );
 }
 
@@ -124,7 +163,7 @@ function nthOfType(el: Element): number {
 
 function segmentFor(el: Element): string {
   const tag = el.tagName.toLowerCase();
-  const classes = stableClasses(el);
+  const classes = semanticClasses(el);
   let seg = tag;
   if (classes.length) {
     seg += `.${classes.map((c) => CSS.escape(c)).join(".")}`;
@@ -159,13 +198,20 @@ export function generateSelector(el: Element): string {
   while (cur && cur !== document.documentElement && cur !== document.body) {
     let seg = segmentFor(cur);
 
-    // Disambiguate among same-tag siblings when class info is insufficient.
+    // Disambiguate among siblings the segment can't tell apart. Test what the
+    // selector actually MATCHES, not segment-string equality: a partial class
+    // segment like `div.foo` still matches a sibling `div.foo.bar`, so string
+    // comparison would miss it and the selector would never become unique.
     const par: Element | null = cur.parentElement;
     if (par) {
-      const sameSeg = Array.from(par.children).filter(
-        (c) => segmentFor(c) === seg,
-      );
-      if (sameSeg.length > 1) seg += `:nth-of-type(${nthOfType(cur)})`;
+      const ambiguous = Array.from(par.children).filter((c) => {
+        try {
+          return c.matches(seg);
+        } catch {
+          return false;
+        }
+      });
+      if (ambiguous.length > 1) seg += `:nth-of-type(${nthOfType(cur)})`;
     }
 
     parts.unshift(seg);
@@ -198,12 +244,17 @@ export function cssModuleToken(cls: string): string | null {
 
 /**
  * A broad, NON-unique selector that matches every element like this one - its
- * stable classes (e.g. `.media-card-rating`), so one pick can blur a whole grid.
- * Falls back to a shared attribute, then a CSS-modules prefix match, then the
- * bare tag.
+ * semantic classes (e.g. `.media-card-rating`), so one pick can blur a whole
+ * grid. Falls back to a shared attribute, then a CSS-modules prefix match.
+ *
+ * When there's no meaningful shared anchor - e.g. a utility-class-only element
+ * on a Tailwind site, where the only classes (`flex`, `col-span-4`) are shared
+ * with unrelated siblings - a bare tag or those utilities would blur half the
+ * page. So we fall back to a precise single-element selector; the user can
+ * broaden it with `:has()` by hand if they want a whole set.
  */
 export function generalizedSelector(el: Element): string {
-  const classes = stableClasses(el);
+  const classes = semanticClasses(el);
   if (classes.length) return classes.map((c) => `.${CSS.escape(c)}`).join("");
   for (const attr of TEST_ATTRS) {
     const val = el.getAttribute(attr);
@@ -222,7 +273,7 @@ export function generalizedSelector(el: Element): string {
   if (tokens.length) {
     return tokens.map((t) => `[class*="${CSS.escape(t)}"]`).join("");
   }
-  return el.tagName.toLowerCase();
+  return generateSelector(el);
 }
 
 /** Selectors for the element and each of its ancestors (for the granularity walk). */
