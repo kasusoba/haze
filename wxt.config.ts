@@ -10,7 +10,7 @@ export default defineConfig({
   // Preact powers the UI surfaces (popup, options, picker); the engine and
   // lib/* stay vanilla. See docs/DESIGN.md.
   vite: () => ({ plugins: [preact()] }),
-  manifest: {
+  manifest: ({ browser }) => ({
     name: "Haze",
     description:
       "Blur, scratchcard, or hide anything on any website. Peek on hover or click, and toggle it all off in one click.",
@@ -21,5 +21,16 @@ export default defineConfig({
     host_permissions: GOOGLE_SEARCH_MATCHES,
     optional_host_permissions: ["*://*/*"],
     action: {},
-  },
+    // Firefox (AMO) requires an explicit data-collection declaration. Haze
+    // collects nothing, so declare "none". Chrome ignores gecko settings.
+    ...(browser === "firefox"
+      ? {
+          browser_specific_settings: {
+            gecko: {
+              data_collection_permissions: { required: ["none"] },
+            },
+          },
+        }
+      : {}),
+  }),
 });
