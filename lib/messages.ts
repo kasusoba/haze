@@ -8,6 +8,8 @@ export interface CreateRuleMessage {
   reveal: Reveal;
   intensity: number;
   grayscale: boolean;
+  /** Scratchcard overlay color chosen in the picker. */
+  bg?: string;
   /** Optional regex source for sub-element text redaction. See lib/text.ts. */
   text?: string;
   /** Optional label anchor for `Label: value` rows. See lib/anchor.ts. */

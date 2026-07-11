@@ -4,43 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Haze</title>
-    <link rel="stylesheet" href="./style.css" />
   </head>
-  <body>
-    <header>
-      <div class="brand">
-        <span class="logo">◐</span>
-        <span>Haze</span>
-      </div>
-      <label class="switch" for="global" title="Master on/off">
-        <input type="checkbox" id="global" />
-        <span class="slider"></span>
-      </label>
-    </header>
-
-    <main id="main">
-      <section class="site">
-        <div class="site-row">
-          <span class="host" id="host">…</span>
-          <label class="switch sm" for="site" title="Enable on this site">
-            <input type="checkbox" id="site" />
-            <span class="slider"></span>
-          </label>
-        </div>
-        <button type="button" class="pick" id="pick">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          Pick element to blur
-        </button>
-        <p class="note" id="note"></p>
-      </section>
-
-      <section class="rules" id="rules"></section>
-    </main>
-
-    <footer>
-      <button type="button" class="aslink" id="options">Manage all rules →</button>
-    </footer>
-
-    <script type="module" src="./main.ts"></script>
+  <body class="haze-root">
+    <div id="app"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

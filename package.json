@@ -1,8 +1,8 @@
 {
   "name": "haze",
-  "description": "Blur, hide, and scratchcard anything on any website - toggle and reveal on hover.",
+  "description": "Blur, scratchcard, or hide anything on any website - peek on hover or click, toggle it all off in one click.",
   "private": true,
-  "version": "2.3.3",
+  "version": "2.4.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -19,10 +19,17 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "@preact/preset-vite": "^2.10.5",
     "typescript": "^6.0.3",
     "wxt": "^0.20.26"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "spawn-sync"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "spawn-sync"
+    ]
+  },
+  "dependencies": {
+    "preact": "^10.29.7"
   }
 }

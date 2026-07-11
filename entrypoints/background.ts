@@ -10,7 +10,7 @@ import {
   getGrantedOrigins,
   loadState,
 } from "../lib/storage";
-import { DEFAULT_BG, type Rule } from "../lib/types";
+import { DEFAULT_BG, normalizeEffect, type Rule } from "../lib/types";
 
 const ENGINE_FILE = "/content-scripts/engine.js";
 const SEEDED_KEY = "defaultsSeeded";
@@ -31,6 +31,7 @@ const LEGACY_KEYS: Record<string, string> = {
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(async () => {
     await migrateLegacy();
+    await migrateEffects();
     await seedDefaults();
     await reRegisterDynamic();
   });
@@ -56,6 +57,25 @@ async function migrateLegacy(): Promise<void> {
     }
   }
   if (changed) await browser.storage.sync.set({ siteDisabled });
+}
+
+/**
+ * Fold legacy effect values into the current set (v2.4). The scratchcard-only
+ * and `both` options were dropped; both become `scratchcard` (blur + card).
+ */
+async function migrateEffects(): Promise<void> {
+  const { userRules } = await loadState();
+  let changed = false;
+  for (const rules of Object.values(userRules)) {
+    for (const rule of rules) {
+      const effect = normalizeEffect(rule.effect);
+      if (effect !== rule.effect) {
+        rule.effect = effect;
+        changed = true;
+      }
+    }
+  }
+  if (changed) await browser.storage.sync.set({ userRules });
 }
 
 /** Seed the bundled default rule once. The flag makes a later deletion stick. */
@@ -123,7 +143,7 @@ async function handleCreateRule(
     intensity: msg.intensity,
     grayscale: msg.grayscale,
     reveal: msg.reveal,
-    bg: DEFAULT_BG,
+    bg: msg.bg ?? DEFAULT_BG,
     text: msg.text,
     label: msg.label,
     enabled: true,

@@ -5,39 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="manifest.open_in_tab" content="true" />
     <title>Haze · Options</title>
-    <link rel="stylesheet" href="./style.css" />
   </head>
-  <body>
-    <div class="wrap">
-      <header>
-        <div class="brand"><span class="logo">◐</span> Haze</div>
-        <label class="switch" for="global">
-          <input type="checkbox" id="global" />
-          <span class="slider"></span>
-          <span class="lbl">Master switch</span>
-        </label>
-      </header>
-
-      <section>
-        <h2>Your rules</h2>
-        <div class="toolbar">
-          <button type="button" id="expand-all">Expand all</button>
-          <button type="button" id="export">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-            Export
-          </button>
-          <button type="button" id="import">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-            Import
-          </button>
-          <input type="file" id="file" accept="application/json" hidden />
-          <span class="hint">Pick elements from any page via the toolbar popup.</span>
-        </div>
-        <div id="user"></div>
-      </section>
-
-      <footer id="version"></footer>
-    </div>
-    <script type="module" src="./main.ts"></script>
+  <body class="haze-root">
+    <div id="app"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

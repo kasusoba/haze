@@ -1,0 +1,285 @@
+/*
+ * Shared Haze UI: design tokens + the rule card / rule editor / form controls
+ * used identically by the popup, the options page, and the picker. Page chrome
+ * (header, toolbars, layout) stays in each surface's own stylesheet.
+ *
+ * Tokens live on `.haze-root` (not `:root`) so they resolve the same way inside
+ * the picker's shadow root as on the extension pages - both just wrap their tree
+ * in `.haze-root`.
+ */
+.haze-root {
+  --bg: #121211;
+  --panel: #1a1a18;
+  --panel2: #222220;
+  --line: #2e2d2a;
+  --text: #eceae6;
+  --muted: #918d85;
+  --accent: #f0a23c;
+  --accent-ink: #221703;
+  --danger: #e0556b;
+  --sel-ink: #cabfae;
+}
+
+/* --- rule list + collapsible card --- */
+.rule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rule-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.rule-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+.rule-head:hover {
+  background: var(--panel2);
+}
+.rule-head .sel {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sel-ink);
+}
+.rule-card.off .rule-head .sel {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.rule-head .tag {
+  flex: none;
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  text-transform: capitalize;
+}
+.rule-head .iconbtn {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.rule-head .iconbtn:hover {
+  color: var(--text);
+}
+.rule-head .iconbtn.del:hover {
+  color: var(--danger);
+}
+
+/* --- rule editor (revealed when the card is open) --- */
+.rule-editor {
+  display: none;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.rule-card.open .rule-editor {
+  display: flex;
+}
+
+/* --- labeled field rows + controls --- */
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.field-name {
+  width: 64px;
+  flex: none;
+}
+.field.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.field-suffix {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ctl {
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 12px;
+  font-family: inherit;
+}
+select.ctl {
+  text-transform: capitalize;
+  cursor: pointer;
+}
+.ctl.grow {
+  flex: 1;
+  min-width: 0;
+}
+/* Shared fixed width so Effect / Reveal / Blur line up at the same size. */
+.field-ctl {
+  width: 140px;
+  flex: none;
+}
+.field-ctl.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.field-ctl.row .ctl {
+  flex: 1;
+  min-width: 0;
+}
+.ctl.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--sel-ink);
+}
+.ctl.num {
+  width: 64px;
+}
+.ctl:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctl.sel.invalid {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.ctl:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.color {
+  width: 36px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel2);
+  cursor: pointer;
+}
+
+/* checkbox styled as a small square; the whole row is a label. Matches the
+   `.field` rows (12px, muted) so a checkbox row lines up with the rest. */
+.cb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.cb.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cb input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel2);
+  cursor: pointer;
+  position: relative;
+}
+.cb input[type="checkbox"]:hover {
+  border-color: var(--muted);
+}
+.cb input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.cb input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 3px;
+  height: 7px;
+  border: solid var(--accent-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* --- pill on/off switch --- */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex: none;
+}
+.switch.sm {
+  width: 32px;
+  height: 18px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+.switch .slider {
+  position: absolute;
+  inset: 0;
+  background: var(--line);
+  border-radius: 999px;
+  transition: 0.15s;
+  cursor: pointer;
+}
+.switch .slider::before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: 0.15s;
+}
+.switch.sm .slider::before {
+  height: 12px;
+  width: 12px;
+}
+.switch input:checked + .slider {
+  background: var(--accent);
+}
+.switch input:checked + .slider::before {
+  transform: translateX(16px);
+}
+.switch.sm input:checked + .slider::before {
+  transform: translateX(14px);
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}

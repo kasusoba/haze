@@ -1,267 +1,201 @@
-# Design: Generic Blur/Scratchcard Engine
+# Design: Haze concealment engine
 
-Status: **implemented (v2.0.0, "Haze")**. This documents the evolution of the
-extension from a fixed set of rating-site stylesheets into a general-purpose
-"blur anything on any site" tool, plus the tech-stack change that went with it.
-The build lives in `entrypoints/` + `lib/` (WXT + TS + Biome); the original
-per-site stylesheets remain in the git history (pre-2.0). Store copy: `STORE_LISTING.md`.
-
----
-
-## 1. Vision
-
-Today the extension blurs hardcoded rating selectors on 8 known sites via
-per-site CSS. The goal is to generalize this so a user can **pick any element on
-any site**, blur and/or scratchcard it, toggle it on/off, and have the effect
-reveal on interaction - exactly the UX we have now, but user-defined and
-universal.
-
-The existing 8 sites don't go away: they become the **seed entries of a shared
-community rule list** (see §5).
+How Haze works under the hood. Haze lets you pick any element on any site and
+blur, scratchcard, or hide it, toggle it on and off, and (for blur/scratchcard)
+reveal it on interaction. The build lives in `entrypoints/` + `lib/`
+(WXT + TypeScript + Biome).
 
 ---
 
-## 2. Core features
+## 1. Overview
 
-All "must haves" agreed in brainstorm:
+Haze is a generic "conceal anything, reveal on demand" tool. There are no
+hardcoded per-site stylesheets; instead the user creates **rules** with the
+element picker, and a small engine materializes them as CSS on matching pages.
 
-- **Element picker** (uBlock-style):
-  - Hover highlights the element under the cursor.
-  - Live preview of the **generated selector**.
-  - **Granularity walk**: move up/down the DOM tree before committing (slider /
-    scroll-wheel / arrow keys), re-highlighting the candidate at each level.
-  - **Editable selector field** so users can hand-fix brittle auto-selectors.
-  - Commit only on an explicit "create" action, never the first click.
-- **Per-rule effect**: `blur` / `scratchcard` / `both`, plus a **blur-intensity**
-  value. (We already special-case `blur(24px)` for IMDb star icons - that becomes
-  a per-rule knob.)
-- **Reveal mode per rule**: `hover` (current default), `click-to-toggle`, or a
-  `scratch` drag gesture (stretch - the scratchcard metaphor begs for it).
-- **Toggle hierarchy**: global master switch (today's `show-ratings` class),
-  per-site, and per-rule.
+The moving parts:
 
----
-
-## 3. The containment problem (most important design constraint)
-
-When rules overlap in the DOM, naive application produces "stacking garbage."
-There are two distinct sub-problems:
-
-### 3a. Pick-time: "the picker grabbed too deep"
-Solved by the **granularity walk** in the picker (§2). The user dials in the
-right level before a rule ever exists.
-
-### 3b. Apply-time: overlapping rules break reveal
-CSS `filter: blur()` on an **ancestor** already blurs its whole subtree. If a
-rule blurs ancestor `A` and another blurs descendant `D` inside it:
-
-- `D` is **double-blurred** (filters compound).
-- **Hover-reveal breaks both ways**: hovering `A` clears `A` but `D` keeps its own
-  filter → `D` stays blurred; hovering `D` can't clear because `A` still filters it.
-
-So nesting silently kills the signature feature. **One effect per visual region
-is mandatory.**
-
-### Resolution: outermost-wins containment dedupe
-- **Save time:** if a new rule's element contains / is contained by an existing
-  rule's element, prompt: *replace / keep outer / cancel*. Intent stays explicit.
-- **Apply time (the real guarantee):** compute **effective targets** = matched
-  elements with **no other targeted element as an ancestor**. Only those get the
-  effect. Inner matches are suppressed (rule stays stored, just not materialized).
-  Hovering the outer reveals the whole region. No stacking, ever, regardless of
-  how messy the rule set becomes. This also dedupes the scratchcard `::after`
-  overlay so only the outermost gets the gray box.
+- **`lib/`** - framework-agnostic logic: the data model, CSS generation,
+  selector generation, containment, text redaction, label anchoring, storage.
+- **`entrypoints/engine.content.ts`** - the content script that applies rules to
+  a page (CSS injection + a MutationObserver for the dynamic cases).
+- **`entrypoints/picker.ts`** - the injected element picker (a self-contained
+  shadow-DOM UI).
+- **`entrypoints/popup/`** and **`entrypoints/options/`** - the toolbar popup and
+  the full options page for managing rules.
+- **`entrypoints/background.ts`** - install/seed/migrate hooks and dynamic
+  content-script registration for user-granted origins.
 
 ---
 
-## 4. Architecture
+## 2. Data model
 
-### 4.1 Hybrid CSS + JS (resolves the FOUC vs dedupe tension)
+A rule (`lib/types.ts`):
 
-Two competing needs:
-
-| Approach | Dynamic DOM (SPA) | Nesting dedupe | FOUC |
-|---|---|---|---|
-| Inject generated `<style>` from selectors | ✅ free | ❌ impossible in pure CSS | ✅ none |
-| JS class-tagging + MutationObserver | needs observer | ✅ full control | ❌ flash before JS runs |
-
-**Recommended: do both.**
-
-1. **`document_start`**: inject a `<style>` built from all active selectors for
-   the host → instant blur, **no flash of unblurred ratings**, auto-applies to
-   dynamically-added elements with zero JS.
-2. **JS + debounced MutationObserver**: only resolves containment. For each inner
-   matched element, add a `.hr-suppressed` class; CSS `.hr-suppressed { filter:
-   none !important }` cancels its blur + scratchcard. Outermost keeps the effect.
-
-This gives no-FOUC + auto-dynamic + clean dedupe, and JS only touches the rare
-nested cases instead of tagging every element.
-
-### 4.2 Reuse from current code
-- The blur + scratchcard CSS block becomes **one static rule set** keyed off
-  `html:not(.show-ratings)` + a generic class, instead of duplicated across 8
-  per-site files.
-- The `show-ratings` toggle mechanism (`storage.onChanged` listener) is reused
-  as-is for the global switch.
-
-### 4.3 Storage schema (draft)
-```jsonc
-// user rules (storage.sync - small) + per-rule overrides of community rules
-{
-  "imdb.com": [
-    { "selector": "[data-testid=\"hero-rating-bar__aggregate-rating\"]",
-      "effect": "both",            // blur | scratchcard | both
-      "intensity": 8,              // px
-      "reveal": "hover",           // hover | click | scratch
-      "enabled": true }
-  ]
+```ts
+interface Rule {
+  id: string;
+  selector: string;      // CSS selector; may be a comma-separated group
+  effect: "blur" | "scratchcard" | "hide";
+  intensity: number;     // blur radius in px
+  grayscale: boolean;    // also desaturate (useful for color-coded indicators)
+  reveal: "hover" | "click";
+  bg?: string;           // scratchcard overlay color; falls back to a default
+  text?: string;         // optional regex: redact only matching substrings
+  label?: string;        // optional "Label: value" row anchor
+  enabled: boolean;
 }
 ```
-- Community rules ship **bundled** (in the package, not sync storage).
-- User rules + per-rule disables layer on top. Disabling a community rule is a
-  **toggle**, never a delete (so list updates don't resurrect it).
+
+### Effects
+- **`blur`** - a Gaussian `filter: blur()`; peek by revealing.
+- **`scratchcard`** - blur *plus* an opaque `::after` cover; peek by revealing.
+- **`hide`** - `display: none`; removed from the page, no reveal.
+
+Reveal, grayscale, and blur radius only apply to `blur`/`scratchcard`; `hide`
+ignores them.
+
+> A pre-2.4 build offered a scratchcard-*only* effect and a `both` (blur + card)
+> effect. Both now collapse to `scratchcard` (blur + card). `normalizeEffect()`
+> in `lib/types.ts` coerces legacy values, and `background.ts` migrates stored
+> rules once on update.
+
+### Storage (`browser.storage.sync`)
+```jsonc
+{
+  "globalEnabled": true,
+  "siteDisabled": { "example.com": true },   // hostKey -> explicitly off
+  "userRules": {                              // hostKey -> the user's rules
+    "google.com": [
+      { "selector": "g-review-stars, ...", "effect": "blur",
+        "intensity": 15, "reveal": "hover", "enabled": true }
+    ]
+  }
+}
+```
+
+Rules are keyed by a normalized `hostKey` (see `lib/host.ts`). Granted custom
+origins are tracked separately in `storage.local` and re-registered on startup.
 
 ---
 
-## 5. Shared / community config
+## 3. The concealment engine
 
-Follows the **EasyList / uBlock filter-list model** (proven pattern):
+### 3.1 Hybrid CSS + JS (no FOUC, still handles dynamic DOM)
 
-- Bundled `rules.json` keyed by hostname; the current 8 sites are the seed.
-- Contributors add/improve selectors via **PR**.
-- **Export/import user rules as JSON** *is* the contribution pipeline: a user
-  perfects rules for a site → exports → opens a PR.
-- Precedence: community defaults < user rules; user can disable any community rule.
-- **Bundled vs remote**: start bundled (no fetch, no host permission, easier store
-  review). Remote auto-update is a later option (needs fetch + permission + trust).
+Two needs pull in opposite directions:
 
----
-
-## 6. Known hard problems / edge cases
-
-- **Selector brittleness** (biggest long-term cost). Sites use hashed CSS-in-JS
-  classes; we already work around it with `[class*="TitleBlock__RatingContainer"]`.
-  The picker should **prefer stable anchors** (`data-testid`, `id`, semantic
-  attributes) over hashed classes and rank candidates by stability. This makes or
-  breaks community contributions.
-- **`storage.sync` quota** (~100KB total, ~8KB/item). Keep the community list out
-  of sync (it's bundled); sync only user rules. Large user sets may need
-  `storage.local`.
-- **Permissions / store review**: `<all_urls>` is a red flag. Prefer **optional
-  host permissions** granted per-site on first pick (or `activeTab` + programmatic
-  injection). See open questions.
-- **Performance**: `querySelectorAll` per rule per mutation will melt heavy pages.
-  Debounce the observer, scope queries, bail when the global toggle is off.
-- **FOUC**: addressed by the hybrid (§4.1) - CSS must inject at `document_start`.
-
----
-
-## 7. Tech stack change
-
-Adopt the new stack **as part of the rewrite into the generic engine**, not as a
-separate migration of the current trivial code.
-
-- **WXT** - biggest payoff:
-  - Generates the manifest from config (kills the giant hand-maintained Google
-    domain list; eases the move to broad/optional host permissions).
-  - **HMR for content scripts** - huge for iterating on the picker.
-  - Free Chrome + Firefox builds (we already do `var browser = browser || chrome`).
-- **TypeScript** - worth it once there's a real data model: the storage schema,
-  picker ↔ content-script ↔ options messaging, and selector-generation logic.
-- **Biome** - cheap lint/format; add it last, it's a nicety not an architectural
-  driver.
-- **Testing** - Playwright E2E against fixture pages for selector + containment
-  regression (WXT supports this).
-
-**Cost to acknowledge**: contributors now need Node + a build, where today they
-need nothing. Justified by the engine; would be over-engineering without it.
-
----
-
-## 8. Decisions & open questions
-
-**Decided:**
-1. **Positioning** - ✅ **New product identity.** "Hide Ratings" + its store
-   listing undersell the generalized scope (spoilers, screen-share privacy, NSFW,
-   counts). Ratings becomes community list #1, not the identity.
-2. **Store listing** - ✅ **Reuse the existing Chrome listing in place** (rebrand
-   the contents). Moot anyway: solo user today, no install base / reviews to
-   preserve, so no reason to spin up a second listing. Keep "ratings" as a keyword
-   in the new title/description for SEO continuity. Optional host perms (decision
-   #3 below) means the rebrand update won't trigger a forced permission prompt.
-3. **Name** - ✅ **Haze** (Deadlock hero; the word literally means visual blur).
-   Chosen over Sombra/Veil because it self-describes the product, carries low
-   trademark risk (generic dictionary word, not a coined character mark), and has
-   weaker store-namespace incumbents. Contested but acceptable ("second place is
-   ok"). See §11 for the namespace check that ruled out the alternatives.
-4. **Build workflow** - ✅ When implementation starts, **build straight through to
-   a finished product**; no mid-way check-ins. User tests once at the end.
-2. **Backward compatibility** - ✅ **Migrate seamlessly**. On upgrade, seed
-   settings from the community list so the 8 built-in sites keep working with no
-   visible change.
-3. **Permission model** - ✅ **Optional host permissions**, requested per-site at
-   first pick, via dynamic `scripting.registerContentScripts`. No broad
-   `<all_urls>` prompt; friendlier install + easier store review.
-
-**Still open:**
-4. **Reveal default for new rules**: hover (matches today) vs click. (Lean: hover.)
-5. **Scratch-drag gesture**: v1 or defer to v2? (Lean: defer; hover/click first.)
-6. **Community-list update cadence**: bundled-per-release only, or remote fetch
-   later?
-
----
-
-## 10. Adjacent use cases (beyond ratings)
-
-The same engine (pick → blur/scratchcard → toggle → reveal) generalizes to any
-"I don't want to see this until I choose to" scenario. Strongest candidates:
-
-- **Spoilers** - sports scores/results, episode counts, plot points, forum/Reddit
-  spoiler text, "who got eliminated." This is the biggest adjacent category and a
-  natural fit for reveal-on-demand. Could be its own flagship community list.
-- **Screen-sharing / recording privacy** - blur API keys, `.env` values, tokens,
-  salaries, account balances, customer data while demoing or streaming. The
-  toggle is the killer feature here: one click to hide everything sensitive.
-- **NSFW / sensitive imagery** - `filter: blur()` works on `<img>` too; scratch
-  to reveal. (User's suggestion - valid, same machinery.)
-- **Anxiety / dopamine hygiene** - hide social like/follower/view counts,
-  notification badges, unread counts (existing single-purpose extensions prove
-  demand); reveal only when you actually want the number.
-- **Anchoring avoidance** - hide prices while comparison shopping, or portfolio /
-  stock balances, to reduce impulse and emotional reaction.
-
-These don't need engine changes - just additional community lists. Suggests the
-community-list system (§5) is the real platform; ratings is just list #1.
-
----
-
-## 9. Suggested build order (de-risked)
-
-1. **Prototype the engine only**: hybrid CSS inject + MutationObserver +
-   outermost-wins suppression, **site-agnostic on all websites** (the engine is
-   generic by design - no hardcoded hosts). Stress-test across the hard cases: a
-   heavy SPA (IMDb), a static page, and an infinite-scroll feed. Prove no-FOUC, no
-   stacking, working reveal *before* committing to the full stack.
-2. Scaffold WXT + TS around the proven engine.
-3. Build the picker (granularity walk + selector stability ranking).
-4. Options UI: rule list, toggles, export/import.
-5. Migrate the 8 sites into `rules.json`; backward-compat shim for old keys.
-
----
-
-## 11. Name candidates (codename from anime / game / movie)
-
-Theme to match: **conceal until revealed** - illusion, mist, cloak, stealth.
-
-| Name | Source | Why it fits | Notes |
+| Approach | Dynamic DOM (SPA) | Nesting dedupe | Flash before JS |
 |---|---|---|---|
-| **Mirage** | Apex Legends / FF | An illusion that isn't real and dissolves on a closer look | Very brandable; common word, check namespace |
-| **Sombra** | Overwatch | Stealth + the "hack to reveal" mirrors hover-to-reveal exactly; "sombra" = shadow | Cool, brandable; common Spanish word |
-| **Genjutsu** | Naruto | Illusion technique - what you see isn't really there | Distinctive codename; spelling is niche for a public name |
-| **Kyoka** | Bleach (Kyōka Suigetsu, Aizen) | A blade that controls all perception / shows false things | Short, brandable, obscure-cool |
-| **Obscura** | Camera obscura / HP "Obscurus" | Literally "to obscure"; ties to vision | Elegant; doubles as a real public name |
-| **Predator/Cloak** | Predator | The cloak IS a shimmering blur - closest to the literal visual | "Cloak" plain; "Predator" trademarked |
+| Inject a generated `<style>` from selectors | free | impossible in pure CSS | none |
+| JS class-tagging + MutationObserver | needs observer | full control | flashes |
 
-Leaning: **Sombra** or **Kyoka** as a cool codename; **Mirage** or **Obscura** if
-it should double as the public store name. Availability check (Chrome Web Store +
-AMO + .com) pending before commit.
+Haze does **both**:
+
+1. At `document_start`, inject a `<style>` built from all active selectors for
+   the host. This blurs instantly with **no flash of unconcealed content**, and
+   auto-applies to elements added later with zero JS.
+2. A debounced **MutationObserver** handles only the cases CSS can't: containment
+   dedupe, text-redaction wrapping, and label-anchor tagging.
+
+The global/site toggle is a single class flip on `<html>` (`haze-active`), so
+turning everything on or off never rebuilds the stylesheet.
+
+### 3.2 Containment: outermost-wins
+
+`filter: blur()` on an ancestor already blurs its whole subtree. If one rule
+blurs ancestor `A` and another blurs descendant `D` inside it:
+
+- `D` is **double-blurred** (filters compound), and
+- **reveal breaks both ways** - hovering `A` clears `A` but `D` keeps its own
+  filter, and hovering `D` can't clear because `A` still filters it.
+
+So nesting silently kills the signature feature. **One effect per visual region
+is mandatory.** The engine computes effective targets = matched elements with no
+other matched element as an ancestor; inner matches get a `haze-suppressed`
+class whose CSS cancels the blur and the scratchcard overlay. The rule stays
+stored, it's just not materialized on the inner element. This is resolved in JS
+because pure CSS can't express "has no matched ancestor."
+
+### 3.3 Text redaction and label anchors
+
+Two refinements let a rule target something smaller or more specific than a whole
+element:
+
+- **Text redaction (`lib/text.ts`)** - when a rule has a `text` regex, the engine
+  wraps only the matching substrings inside the matched element in spans and
+  applies the effect to those, rather than the whole element. This handles a
+  rating that lives as a bare text node in a larger line.
+- **Label anchors (`lib/anchor.ts`)** - when a rule has a `label`, it matches only
+  those `selector` elements immediately preceded by that label (the
+  `Label: value` row shape). This is the reliable way to target one field on
+  sites where every value shares the same classes. It's resolved in JS and
+  exposed to the CSS pipeline via a per-rule marker class.
+
+---
+
+## 4. The picker
+
+An uBlock-style element picker (`entrypoints/picker.ts`), injected via
+`scripting.executeScript` under `activeTab` so it works before any persistent
+permission exists.
+
+- **Hit-testing** walks the full z-stack (not just the topmost element) so
+  full-size hover overlays and click-catchers don't mask the real target;
+  content-bearing elements win over empty boxes, then the smallest box wins.
+- **Two-phase**: hover to preview, click to lock. Once locked, the selection is
+  frozen so you can move to the toolbar and widen/tighten (up/down the DOM tree)
+  without the mouse re-picking.
+- **Selector generation (`lib/selector.ts`)** prefers stable anchors
+  (`data-testid`, `id`, semantic attributes) over hashed CSS-in-JS classes, and
+  can generalize to "all similar" elements or pin to "this one."
+- **Live preview** renders the pending rule against a separate gate class
+  (`haze-preview`) so it never touches real engine state.
+- Creating a rule sends it to the background, which stores it and (for
+  non-builtin sites) registers a persistent content script for that origin.
+
+Selector brittleness is the biggest long-term cost: sites use hashed classes, so
+stability ranking in the picker is what makes rules survive site updates.
+
+---
+
+## 5. Permissions
+
+- **Google Search** ships as a static `host_permission` so the one built-in rule
+  works at install with a modest prompt.
+- **Everything else** uses **optional host permissions**, requested per-site the
+  first time you pick an element there (a clear user gesture), then persisted by
+  registering a dynamic content script for that origin. No broad `<all_urls>`
+  prompt at install; friendlier and easier to review.
+
+WXT generates the manifest from `wxt.config.ts`.
+
+---
+
+## 6. Default rule and migration
+
+Haze seeds exactly one rule on first run (`lib/defaults.ts`): blur Google
+Search's review stars and ratings. It's seeded into the user's own rules (not a
+separate layer), so it's editable and deletable like anything they create; a
+`defaultsSeeded` flag makes a later deletion stick.
+
+On update, `background.ts` runs one-time migrations: mapping legacy per-site
+toggle keys to the new `hostKey` scheme, and folding legacy effect values
+(scratchcard-only, `both`) into the current set.
+
+---
+
+## 7. Stack and performance notes
+
+- **WXT** generates the manifest, gives HMR for content scripts, and produces
+  Chrome + Firefox builds.
+- **TypeScript** carries the data model and the picker <-> background messaging.
+- **Preact** powers the UI. The popup and options page share a `RuleCard` /
+  `RuleEditor` component set (`components/`) so the two surfaces are identical;
+  the picker stays vanilla (its live-page interaction model doesn't fit a
+  declarative rewrite) but injects the same shared stylesheet into its shadow
+  root so its controls match. The engine and `lib/*` are deliberately vanilla.
+- **Biome** for lint/format.
+- **Performance**: the observer is debounced, containment queries are scoped, and
+  everything short-circuits when the global toggle is off. CSS injects at
+  `document_start` to avoid FOUC.

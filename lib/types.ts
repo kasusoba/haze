@@ -1,6 +1,12 @@
-// Core data model for Haze. See docs/DESIGN.md §4.3.
+// Core data model for Haze. See docs/DESIGN.md.
 
-export type Effect = "blur" | "scratchcard" | "both";
+/**
+ * How a matched element is concealed:
+ * - `blur`        - Gaussian blur; peek by revealing.
+ * - `scratchcard` - blur *plus* an opaque card overlay; peek by revealing.
+ * - `hide`        - removed from layout entirely (display:none), no reveal.
+ */
+export type Effect = "blur" | "scratchcard" | "hide";
 export type Reveal = "hover" | "click";
 
 /** A single rule the user owns (created via the picker or seeded as a default). */
@@ -39,3 +45,18 @@ export const DEFAULT_EFFECT: Effect = "blur";
 export const DEFAULT_REVEAL: Reveal = "hover";
 /** Neutral mid-gray scratchcard background when a site sets none. */
 export const DEFAULT_BG = "#888";
+
+/** The effects offered in the UI, in display order. */
+export const EFFECTS: Effect[] = ["blur", "scratchcard", "hide"];
+
+/**
+ * Coerce a stored/imported effect to the current set. Pre-2.4 shipped a
+ * scratchcard-*only* option and a `both` (blur+card) option; both now collapse
+ * to `scratchcard`, which means blur *and* the card overlay. Anything
+ * unrecognized falls back to `blur`.
+ */
+export function normalizeEffect(effect: string): Effect {
+  if (effect === "blur" || effect === "hide") return effect;
+  if (effect === "scratchcard" || effect === "both") return "scratchcard";
+  return "blur";
+}

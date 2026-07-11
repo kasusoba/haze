@@ -4,3 +4,6 @@ node_modules
 .wxt
 *.zip
 stats.html
+
+# Personal, un-shared docs: store-listing copy, planning notes, name ideas.
+.local/

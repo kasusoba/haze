@@ -44,8 +44,10 @@ export function generateCss(
 
   for (const rule of rules) {
     const bg = rule.bg ?? defaultBg;
-    const wantsBlur = rule.effect === "blur" || rule.effect === "both";
-    const wantsCard = rule.effect === "scratchcard" || rule.effect === "both";
+    // `scratchcard` is blur *plus* the card overlay; `hide` removes the element.
+    const wantsBlur = rule.effect === "blur" || rule.effect === "scratchcard";
+    const wantsCard = rule.effect === "scratchcard";
+    const wantsHide = rule.effect === "hide";
 
     for (const part of splitSelector(rule.selector)) {
       const base = `html.${gate} ${part}`;
@@ -56,6 +58,12 @@ export function generateCss(
       const revealed = rule.text
         ? `${base}.${REVEALED_CLASS} .${textClass}`
         : `${base}.${REVEALED_CLASS}`;
+
+      // Hide: no reveal, no overlay - just take it out of the flow.
+      if (wantsHide) {
+        out.push(`${target}{display:none !important}`);
+        continue;
+      }
 
       if (wantsBlur) {
         out.push(`${target}{filter:${blurFilter(rule)};transition:filter .2s}`);
@@ -94,7 +102,9 @@ export function generateCss(
   return out.join("\n");
 }
 
-/** Individual selectors of rules whose reveal mode is click. */
+/** Individual selectors of rules whose reveal mode is click (hidden rules never reveal). */
 export function clickSelectorParts(rules: Rule[]): string[] {
-  return allSelectorParts(rules.filter((r) => r.reveal === "click"));
+  return allSelectorParts(
+    rules.filter((r) => r.reveal === "click" && r.effect !== "hide"),
+  );
 }

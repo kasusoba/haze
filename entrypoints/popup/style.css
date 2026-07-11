@@ -1,15 +1,4 @@
-:root {
-  --bg: #121211;
-  --panel: #1a1a18;
-  --panel2: #222220;
-  --line: #2e2d2a;
-  --text: #eceae6;
-  --muted: #918d85;
-  --accent: #f0a23c;
-  --accent-ink: #221703;
-  --danger: #e0556b;
-}
-
+/* Popup page chrome. Shared rule/editor/control styles live in haze-ui.css. */
 * {
   box-sizing: border-box;
 }
@@ -32,7 +21,6 @@ header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--line);
 }
-
 .brand {
   display: flex;
   align-items: center;
@@ -64,6 +52,7 @@ main {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 220px;
+  margin: 0;
 }
 
 .pick {
@@ -88,11 +77,6 @@ main {
 .pick:hover {
   background: #f4ad53;
 }
-.pick:disabled {
-  background: var(--line);
-  color: var(--muted);
-  cursor: not-allowed;
-}
 
 .note {
   color: var(--muted);
@@ -108,72 +92,12 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
-  margin: 16px 0 8px;
+  margin: 0 0 8px;
   font-weight: 600;
-}
-.rules > h2:first-child {
-  margin-top: 0;
 }
 .rules h2 span {
   color: var(--accent);
   font-weight: 700;
-}
-
-ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 9px;
-}
-li .sel {
-  flex: 1;
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #cabfae;
-}
-li.off .sel {
-  opacity: 0.45;
-  text-decoration: line-through;
-}
-li .tag {
-  font-size: 10px;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-li button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 2px 4px;
-}
-li button:hover {
-  color: var(--text);
-}
-li button.del:hover {
-  color: var(--danger);
-}
-.empty {
-  color: var(--muted);
-  font-size: 12px;
-  font-style: italic;
 }
 
 footer {
@@ -192,53 +116,4 @@ footer .aslink {
 footer .aslink:hover {
   color: var(--text);
   text-decoration: underline;
-}
-
-/* toggle switch */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 38px;
-  height: 22px;
-}
-.switch.sm {
-  width: 32px;
-  height: 18px;
-}
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.slider {
-  position: absolute;
-  inset: 0;
-  background: var(--line);
-  border-radius: 999px;
-  transition: 0.15s;
-  cursor: pointer;
-}
-.slider::before {
-  content: "";
-  position: absolute;
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  bottom: 3px;
-  background: #fff;
-  border-radius: 50%;
-  transition: 0.15s;
-}
-.switch.sm .slider::before {
-  height: 12px;
-  width: 12px;
-}
-input:checked + .slider {
-  background: var(--accent);
-}
-input:checked + .slider::before {
-  transform: translateX(16px);
-}
-.switch.sm input:checked + .slider::before {
-  transform: translateX(14px);
 }

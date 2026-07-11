@@ -1,5 +1,8 @@
 import { browser } from "wxt/browser";
 import { defineUnlistedScript } from "wxt/utils/define-unlisted-script";
+// Shared control/token styles, injected into the picker's shadow root so its
+// selects/checkboxes/color swatch match the popup and options editors exactly.
+import hazeShared from "../components/haze-ui.css?inline";
 import { anchorMatches, labelOf } from "../lib/anchor";
 import { generateCss, PREVIEW_CLASS } from "../lib/css";
 import type { CreateRuleMessage, CreateRuleResponse } from "../lib/messages";
@@ -53,6 +56,7 @@ function startPicker(onClose: () => void): void {
   document.documentElement.appendChild(previewStyle);
 
   root.innerHTML = `
+    <style>${hazeShared}</style>
     <style>
       :host { all: initial; }
       .box {
@@ -87,10 +91,6 @@ function startPicker(onClose: () => void): void {
         width: 30px; height: 28px; padding: 0;
         display: inline-flex; align-items: center; justify-content: center;
       }
-      .bar select {
-        background: #121211; color: #eceae6; border: 1px solid #2e2d2a;
-        border-radius: 6px; padding: 5px 6px;
-      }
       .bar .count { color: #918d85; white-space: nowrap; }
       .bar button {
         border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer;
@@ -98,58 +98,48 @@ function startPicker(onClose: () => void): void {
       }
       .bar button:disabled { opacity: .4; cursor: not-allowed; }
       .bar button.go { background: #f0a23c; color: #2a1c08; }
-      .bar .prev {
-        display: flex; align-items: center; gap: 5px;
-        color: #918d85; font-size: 11px; white-space: nowrap; cursor: pointer;
-      }
-      .bar .prev input {
-        appearance: none; -webkit-appearance: none; margin: 0;
-        width: 14px; height: 14px; border: 1px solid #2e2d2a;
-        border-radius: 4px; background: #121211; cursor: pointer; position: relative;
-      }
-      .bar .prev input:checked { background: #f0a23c; border-color: #f0a23c; }
-      .bar .prev input:checked::after {
-        content: ''; position: absolute; left: 4px; top: 1px;
-        width: 3px; height: 7px; border: solid #221703;
-        border-width: 0 2px 2px 0; transform: rotate(45deg);
-      }
+      /* Effect/reveal/scope selects, the color swatch, and the Gray/Preview/
+         anchor checkboxes use the shared .ctl/.color/.cb classes from the
+         injected haze-ui stylesheet; only their bar-local layout stays here. */
+      .bar .cb { white-space: nowrap; font-size: 12px; }
       .bar .hint { color: #9b9183; width: 100%; font-size: 11px; }
     </style>
     <div class="box" id="box"></div>
     <div class="tbox" id="tbox"></div>
-    <div class="bar">
+    <div class="bar haze-root">
       <div class="row">
         <input class="sel" id="sel" spellcheck="false" placeholder="click an element to start…" />
         <span class="count" id="count"></span>
-        <button class="iconbtn" id="up" title="Broaden — select parent (↑)" disabled>▲</button>
-        <button class="iconbtn" id="down" title="Narrow — select child (↓)" disabled>▼</button>
+        <button class="iconbtn" id="up" title="Broaden - select parent (↑)" disabled>▲</button>
+        <button class="iconbtn" id="down" title="Narrow - select child (↓)" disabled>▼</button>
       </div>
       <div class="row">
-        <input class="sel" id="text" spellcheck="false" placeholder="optional: redact only part of the element — click “Pick text”, then click the text" />
+        <input class="sel" id="text" spellcheck="false" placeholder="optional: redact only part of the element - click 'Pick text', then click the text" />
         <button id="picktext" title="Click the exact text to redact; a pattern is derived for you" disabled>Pick text</button>
       </div>
       <div class="row" id="anchorrow" style="display:none">
-        <label class="prev"><input type="checkbox" id="anchor" /> Match by label</label>
-        <input class="sel" id="label" spellcheck="false" placeholder="label text — matches only values under this label" />
+        <label class="cb"><input type="checkbox" id="anchor" /> Match by label</label>
+        <input class="sel" id="label" spellcheck="false" placeholder="label text - matches only values under this label" />
       </div>
       <div class="row controls">
-        <select id="scope" title="How many elements to match">
+        <select id="scope" class="ctl" title="How many elements to match">
           <option value="similar">All similar</option>
           <option value="one">This one</option>
         </select>
-        <select id="effect" title="Effect">
+        <select id="effect" class="ctl" title="Effect">
           <option value="blur">Blur</option>
           <option value="scratchcard">Scratchcard</option>
-          <option value="both">Both</option>
+          <option value="hide">Hide</option>
         </select>
-        <select id="reveal" title="Reveal on">
+        <input type="color" id="bg" class="color" value="#888888" title="Scratchcard color" style="display:none" />
+        <select id="reveal" class="ctl" title="Reveal on">
           <option value="hover">Hover</option>
           <option value="click">Click</option>
         </select>
-        <label class="prev"><input type="checkbox" id="gray" /> Gray</label>
-        <label class="prev"><input type="checkbox" id="preview" checked /> Preview</label>
+        <label class="cb"><input type="checkbox" id="gray" /> Gray</label>
+        <label class="cb"><input type="checkbox" id="preview" checked /> Preview</label>
         <span class="spacer"></span>
-        <button id="repick" title="Repick — back to hovering (Esc)" disabled>Repick</button>
+        <button id="repick" title="Repick - back to hovering (Esc)" disabled>Repick</button>
         <button class="go" id="create" disabled>Create</button>
         <button id="cancel">Cancel</button>
       </div>
@@ -170,6 +160,7 @@ function startPicker(onClose: () => void): void {
   const revealSel = root.getElementById("reveal") as HTMLSelectElement;
   const scopeSel = root.getElementById("scope") as HTMLSelectElement;
   const grayCb = root.getElementById("gray") as HTMLInputElement;
+  const bgInput = root.getElementById("bg") as HTMLInputElement;
   const previewCb = root.getElementById("preview") as HTMLInputElement;
   const upBtn = root.getElementById("up") as HTMLButtonElement;
   const downBtn = root.getElementById("down") as HTMLButtonElement;
@@ -325,6 +316,7 @@ function startPicker(onClose: () => void): void {
       intensity: DEFAULT_INTENSITY,
       grayscale: grayCb.checked,
       reveal: revealSel.value as Reveal,
+      bg: bgInput.value,
       text: textInput.value.trim() || undefined,
       label: activeLabel() ?? undefined,
       enabled: true,
@@ -364,6 +356,16 @@ function startPicker(onClose: () => void): void {
       previewStyle.textContent = "";
       document.documentElement.classList.remove(PREVIEW_CLASS);
     }
+  }
+
+  // Hide removes the element outright, so reveal-on and grayscale don't apply;
+  // the scratchcard color only matters for the scratchcard effect.
+  function syncEffectUI(): void {
+    const hidden = effectSel.value === "hide";
+    revealSel.disabled = hidden;
+    grayCb.disabled = hidden;
+    bgInput.style.display =
+      effectSel.value === "scratchcard" ? "inline-block" : "none";
   }
 
   function setLocked(value: boolean): void {
@@ -584,6 +586,7 @@ function startPicker(onClose: () => void): void {
       reveal: revealSel.value as Reveal,
       intensity: DEFAULT_INTENSITY,
       grayscale: grayCb.checked,
+      bg: bgInput.value,
       text: textInput.value.trim() || undefined,
       label: activeLabel() ?? undefined,
     };
@@ -628,9 +631,13 @@ function startPicker(onClose: () => void): void {
   repickBtn.addEventListener("click", unlock);
   pickTextBtn.addEventListener("click", enterTextPick);
   scopeSel.addEventListener("change", refresh);
-  effectSel.addEventListener("change", updatePreview);
+  effectSel.addEventListener("change", () => {
+    syncEffectUI();
+    updatePreview();
+  });
   revealSel.addEventListener("change", updatePreview);
   grayCb.addEventListener("change", updatePreview);
+  bgInput.addEventListener("input", updatePreview);
   previewCb.addEventListener("change", updatePreview);
   anchorCb.addEventListener("change", () => {
     syncAnchorScope();

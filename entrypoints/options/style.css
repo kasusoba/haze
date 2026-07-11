@@ -1,14 +1,4 @@
-:root {
-  --bg: #0f0f0e;
-  --panel: #181816;
-  --panel2: #211f1d;
-  --line: #2c2b28;
-  --text: #eceae6;
-  --muted: #918d85;
-  --accent: #f0a23c;
-  --accent-ink: #221703;
-  --danger: #e0556b;
-}
+/* Options page chrome. Shared rule/editor/control styles live in haze-ui.css. */
 * {
   box-sizing: border-box;
 }
@@ -45,6 +35,16 @@ header {
   color: var(--accent);
   font-size: 22px;
 }
+.master {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.master .lbl {
+  font-size: 12px;
+  color: var(--muted);
+}
 h2 {
   font-size: 13px;
   text-transform: uppercase;
@@ -55,7 +55,6 @@ h2 {
 .hint {
   color: var(--muted);
   font-size: 12px;
-  margin: 0 0 12px;
 }
 .toolbar {
   display: flex;
@@ -81,8 +80,12 @@ h2 {
   width: 14px;
   height: 14px;
 }
-.toolbar button:hover {
+.toolbar button:hover:not(:disabled) {
   border-color: var(--muted);
+}
+.toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .site {
@@ -96,18 +99,15 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+.site.collapsed .site-head {
+  margin-bottom: 0;
 }
 .site-head .name {
   font-weight: 700;
   font-family: ui-monospace, monospace;
   color: var(--text);
-}
-.site.collapsed .site-head {
-  margin-bottom: 0;
-}
-.site.collapsed .site-body {
-  display: none;
 }
 .site-off .site-head .name,
 .site-off .site-head .count {
@@ -146,173 +146,12 @@ h2 {
   font-size: 12px;
   font-weight: 400;
 }
-.rule {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 0;
-  border-top: 1px solid var(--line);
+.site-body {
+  margin-top: 4px;
 }
-/* The editable fields wrap freely inside their own zone... */
-.rule-fields {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-/* ...while on/delete stay a fixed cluster pinned to the top-right. */
-.rule-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-}
-.rule .sel {
-  flex: 1 1 240px;
-  min-width: 180px;
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  background: var(--panel2);
-  color: #cabfae;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-.rule .sel[readonly] {
-  opacity: 0.8;
-}
-.rule .label {
-  flex: 0 1 120px;
-  min-width: 90px;
-  font-size: 12px;
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-.rule select,
-.rule input.num {
-  background: var(--panel2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 6px;
-  font-size: 12px;
-}
-.rule input.num {
-  width: 56px;
-}
-.rule label.cb {
-  font-size: 11px;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-}
-.cb input[type="checkbox"] {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  flex: none;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--bg);
-  cursor: pointer;
-  position: relative;
-}
-.cb input[type="checkbox"]:hover {
-  border-color: var(--muted);
-}
-.cb input[type="checkbox"]:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.cb input[type="checkbox"]:checked::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 3px;
-  height: 7px;
-  border: solid var(--accent-ink);
-  border-width: 0 2px 2px 0;
-  transform: rotate(45deg);
-}
-.rule .del {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 14px;
-}
-.rule .del:hover {
-  color: var(--danger);
-}
-.rule .sel.invalid {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-.rule.off {
-  opacity: 0.5;
-}
-.empty {
-  color: var(--muted);
-  font-style: italic;
-  font-size: 13px;
-}
+
 footer {
   margin-top: 30px;
   color: var(--muted);
   font-size: 11px;
-}
-
-.switch {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.switch input {
-  position: absolute;
-  opacity: 0;
-  width: 38px;
-  height: 22px;
-  margin: 0;
-  cursor: pointer;
-}
-.slider {
-  width: 38px;
-  height: 22px;
-  background: var(--line);
-  border-radius: 999px;
-  position: relative;
-  transition: 0.15s;
-}
-.slider::before {
-  content: "";
-  position: absolute;
-  height: 16px;
-  width: 16px;
-  left: 3px;
-  top: 3px;
-  background: #fff;
-  border-radius: 50%;
-  transition: 0.15s;
-}
-input:checked + .slider {
-  background: var(--accent);
-}
-input:checked + .slider::before {
-  transform: translateX(16px);
-}
-.switch .lbl {
-  font-size: 12px;
-  color: var(--muted);
 }
