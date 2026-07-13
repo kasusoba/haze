@@ -16,7 +16,16 @@ export interface CreateRuleMessage {
   label?: string;
 }
 
-export type HazeMessage = CreateRuleMessage;
+/**
+ * Sent by the options page after an import to register content scripts for the
+ * origins whose host permission the user just granted. See background.ts.
+ */
+export interface RegisterOriginsMessage {
+  type: "haze:register-origins";
+  patterns: string[];
+}
+
+export type HazeMessage = CreateRuleMessage | RegisterOriginsMessage;
 
 export interface CreateRuleResponse {
   ok: boolean;

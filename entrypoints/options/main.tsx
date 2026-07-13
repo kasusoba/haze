@@ -4,6 +4,7 @@ import { browser } from "wxt/browser";
 import { Switch } from "../../components/controls";
 import { RuleCard } from "../../components/RuleCard";
 import type { RulePatch } from "../../components/RuleEditor";
+import { isBuiltinHost } from "../../lib/defaults";
 import {
   type HazeState,
   loadState,
@@ -87,14 +88,44 @@ async function exportRules() {
   URL.revokeObjectURL(url);
 }
 
+/** Match pattern covering a hostKey and its subdomains, e.g. *://*.imdb.com/* */
+function originPatternForKey(key: string): string {
+  return `*://*.${key}/*`;
+}
+
+/**
+ * Origins for the given rules that this device lacks permission for. Rules sync
+ * across devices but host permissions don't, so a fresh device sees every
+ * non-builtin site here until the user grants them. See grantImported.
+ */
+async function missingGrantsFor(
+  userRules: Record<string, Rule[]>,
+): Promise<string[]> {
+  const patterns = Object.keys(userRules)
+    .filter((k) => (userRules[k]?.length ?? 0) > 0 && !isBuiltinHost(k))
+    .map(originPatternForKey);
+  const missing: string[] = [];
+  for (const p of patterns) {
+    if (!(await browser.permissions.contains({ origins: [p] })))
+      missing.push(p);
+  }
+  return missing;
+}
+
 function Options() {
   const [state, setState] = useState<HazeState | null>(null);
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
   const [expandedRules, setExpandedRules] = useState<Set<string>>(new Set());
+  const [pendingGrants, setPendingGrants] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    loadState().then(setState);
+    (async () => {
+      const loaded = await loadState();
+      setState(loaded);
+      // Surface synced sites this device hasn't granted yet as a one-click prompt.
+      setPendingGrants(await missingGrantsFor(loaded.userRules));
+    })();
   }, []);
 
   if (!state) return null;
@@ -165,6 +196,42 @@ function Options() {
         : {}),
     });
     setState(await loadState());
+
+    // Rules alone don't run: each non-builtin site needs a host permission and
+    // a registered content script. Collect the sites that still lack a grant.
+    const missing = await missingGrantsFor(userRules);
+    if (!missing.length) {
+      setPendingGrants([]);
+      return;
+    }
+    // Try to prompt right away (the file-input change is a user gesture). If the
+    // browser rejects it because the gesture expired across the awaits above,
+    // fall back to the banner button, which requests from a fresh click.
+    const ok = await requestAndRegister(missing);
+    setPendingGrants(ok ? [] : missing);
+  };
+
+  // Request host permission for the given sites in one browser prompt, then have
+  // the background register their content scripts so the effects take hold
+  // without picking on each site. Returns false if denied or the prompt failed.
+  const requestAndRegister = async (patterns: string[]): Promise<boolean> => {
+    let granted = false;
+    try {
+      granted = await browser.permissions.request({ origins: patterns });
+    } catch {
+      granted = false;
+    }
+    if (!granted) return false;
+    await browser.runtime.sendMessage({
+      type: "haze:register-origins",
+      patterns,
+    });
+    return true;
+  };
+
+  const grantImported = async () => {
+    if (!pendingGrants.length) return;
+    if (await requestAndRegister(pendingGrants)) setPendingGrants([]);
   };
 
   return (
@@ -212,6 +279,20 @@ function Options() {
             Pick elements from any page via the toolbar popup.
           </span>
         </div>
+
+        {pendingGrants.length > 0 && (
+          <div class="grant-banner">
+            <span>
+              {pendingGrants.length} imported{" "}
+              {pendingGrants.length === 1 ? "site needs" : "sites need"}{" "}
+              permission before their effects can run.
+            </span>
+            <button type="button" class="grant-btn" onClick={grantImported}>
+              Enable {pendingGrants.length}{" "}
+              {pendingGrants.length === 1 ? "site" : "sites"}
+            </button>
+          </div>
+        )}
 
         {keys.length === 0 ? (
           <p class="empty">

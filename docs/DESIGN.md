@@ -75,7 +75,12 @@ ignores them.
 ```
 
 Rules are keyed by a normalized `hostKey` (see `lib/host.ts`). Granted custom
-origins are tracked separately in `storage.local` and re-registered on startup.
+origins are tracked in `grantedOrigins` (also in `storage.sync`, so the set of
+sites travels between devices) and re-registered on startup. The host permission
+itself can't sync — the browser requires a user gesture to grant it — so on a
+fresh device only origins that device already has permission for are registered;
+the rest are surfaced as a one-click grant prompt when the options page opens
+(and right after an import). See `entrypoints/options/main.tsx`.
 
 ---
 

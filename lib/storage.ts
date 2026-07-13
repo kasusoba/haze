@@ -68,10 +68,15 @@ export async function addRulesIfAbsent(
   await setUserRules(key, [...existing, ...fresh]);
 }
 
-// --- granted dynamic origins (storage.local; re-registered on startup) ---
+// --- granted dynamic origins ---
+// Stored in storage.sync so the set of sites the user runs Haze on travels
+// between devices. The actual host permission can't be synced (the browser
+// requires a user gesture to grant it), so on each device we re-register only
+// the origins that device has permission for; the rest are surfaced as a
+// one-click grant prompt in the options page. See background.ts / options.
 
 export async function getGrantedOrigins(): Promise<string[]> {
-  const { grantedOrigins } = await browser.storage.local.get({
+  const { grantedOrigins } = await browser.storage.sync.get({
     grantedOrigins: [] as string[],
   });
   return grantedOrigins as string[];
@@ -81,6 +86,6 @@ export async function addGrantedOrigin(pattern: string): Promise<void> {
   const origins = await getGrantedOrigins();
   if (!origins.includes(pattern)) {
     origins.push(pattern);
-    await browser.storage.local.set({ grantedOrigins: origins });
+    await browser.storage.sync.set({ grantedOrigins: origins });
   }
 }

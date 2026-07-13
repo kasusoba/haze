@@ -32,6 +32,7 @@ export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(async () => {
     await migrateLegacy();
     await migrateEffects();
+    await migrateGrantedOrigins();
     await seedDefaults();
     await reRegisterDynamic();
   });
@@ -41,6 +42,9 @@ export default defineBackground(() => {
     const msg = message as HazeMessage;
     if (msg?.type === "haze:create-rule") {
       return handleCreateRule(msg, sender);
+    }
+    if (msg?.type === "haze:register-origins") {
+      return handleRegisterOrigins(msg);
     }
     return undefined;
   });
@@ -76,6 +80,18 @@ async function migrateEffects(): Promise<void> {
     }
   }
   if (changed) await browser.storage.sync.set({ userRules });
+}
+
+/**
+ * Granted origins used to live in storage.local (per-device). Move any into the
+ * synced list once so the set travels between devices, then drop the local copy.
+ */
+async function migrateGrantedOrigins(): Promise<void> {
+  const got = await browser.storage.local.get("grantedOrigins");
+  const local = (got.grantedOrigins as string[] | undefined) ?? [];
+  if (!local.length) return;
+  for (const pattern of local) await addGrantedOrigin(pattern);
+  await browser.storage.local.remove("grantedOrigins");
 }
 
 /** Seed the bundled default rule once. The flag makes a later deletion stick. */
@@ -123,6 +139,22 @@ async function registerForPattern(
   } catch {
     /* permission revoked or already registered - ignore */
   }
+}
+
+/**
+ * Persist + register content scripts for origins the user granted while
+ * importing. Permission is requested in the options page (needs a user
+ * gesture); here we just record and register the ones now granted.
+ */
+async function handleRegisterOrigins(
+  msg: Extract<HazeMessage, { type: "haze:register-origins" }>,
+): Promise<{ ok: boolean }> {
+  for (const pattern of msg.patterns) {
+    if (!(await browser.permissions.contains({ origins: [pattern] }))) continue;
+    await addGrantedOrigin(pattern);
+    await registerForPattern(pattern, new Set());
+  }
+  return { ok: true };
 }
 
 async function handleCreateRule(

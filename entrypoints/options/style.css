@@ -155,3 +155,34 @@ footer {
   color: var(--muted);
   font-size: 11px;
 }
+
+/* Post-import prompt: imported rules need a host permission grant to run. */
+.grant-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  background: var(--panel2);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.grant-banner span {
+  flex: 1;
+  min-width: 180px;
+}
+.grant-btn {
+  background: var(--accent);
+  color: var(--bg);
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+.grant-btn:hover {
+  opacity: 0.9;
+}
