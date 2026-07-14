@@ -2,7 +2,7 @@
   "name": "haze",
   "description": "Blur, scratchcard, or hide anything on any website - peek on hover or click, toggle it all off in one click.",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.5.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",

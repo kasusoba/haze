@@ -5,6 +5,7 @@ import { Switch } from "../../components/controls";
 import { RuleCard } from "../../components/RuleCard";
 import type { RulePatch } from "../../components/RuleEditor";
 import { isBuiltinHost } from "../../lib/defaults";
+import { missingGrantsFor, requestAndRegisterOrigins } from "../../lib/grants";
 import { hostKey, isInjectableUrl, originPattern } from "../../lib/host";
 import {
   loadState,
@@ -15,6 +16,8 @@ import {
 import type { Rule } from "../../lib/types";
 import "../../components/haze-ui.css";
 import "./style.css";
+
+const ENGINE_FILE = "/content-scripts/engine.js";
 
 interface Site {
   tabId: number;
@@ -52,6 +55,7 @@ function Popup() {
   const [siteOn, setSiteOn] = useState(true);
   const [rules, setRules] = useState<Rule[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pendingGrants, setPendingGrants] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -72,9 +76,30 @@ function Popup() {
         setSiteOn(!state.siteDisabled[key]);
         setRules(state.userRules[key] ?? []);
       }
+      // Any synced site still missing permission on this device. Shown
+      // regardless of the current tab so the user can grant everything up
+      // front, before visiting the site and seeing it unblurred.
+      setPendingGrants(await missingGrantsFor(state.userRules));
       setLoaded(true);
     })();
   }, []);
+
+  const grantPending = async () => {
+    if (!pendingGrants.length) return;
+    if (!(await requestAndRegisterOrigins(pendingGrants))) return;
+    // If the current tab is one we just enabled, apply it without a reload.
+    if (site) {
+      try {
+        await browser.scripting.executeScript({
+          target: { tabId: site.tabId },
+          files: [ENGINE_FILE],
+        });
+      } catch {
+        /* tab gone or not injectable - ignore */
+      }
+    }
+    setPendingGrants([]);
+  };
 
   const persist = (next: Rule[]) => {
     setRules(next);
@@ -115,6 +140,21 @@ function Popup() {
       </header>
 
       <main>
+        {pendingGrants.length > 0 && (
+          <div class="grant-banner">
+            <span>
+              {pendingGrants.length}{" "}
+              {pendingGrants.length === 1 ? "site" : "sites"} with synced rules{" "}
+              {pendingGrants.length === 1 ? "needs" : "need"} permission on this
+              device. Grant now so they blur before you visit.
+            </span>
+            <button type="button" class="grant-btn" onClick={grantPending}>
+              Enable {pendingGrants.length}{" "}
+              {pendingGrants.length === 1 ? "site" : "sites"}
+            </button>
+          </div>
+        )}
+
         {loaded && !site && (
           <section class="site">
             <p class="host">Not available here</p>

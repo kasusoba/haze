@@ -78,6 +78,34 @@ main {
   background: #f4ad53;
 }
 
+/* Synced rules whose sites this device hasn't granted permission for yet. */
+.grant-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}
+.grant-btn {
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+.grant-btn:hover {
+  background: #f4ad53;
+}
+
 .note {
   color: var(--muted);
   font-size: 11px;

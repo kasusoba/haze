@@ -18,6 +18,11 @@ export function originPattern(url: string): string {
   return `${u.protocol}//${u.hostname}/*`;
 }
 
+/** Match pattern covering a hostKey and its subdomains, e.g. *://*.imdb.com/* */
+export function originPatternForKey(key: string): string {
+  return `*://*.${key}/*`;
+}
+
 /** Whether a URL is one Haze can run on at all (http/https only). */
 export function isInjectableUrl(url: string | undefined): url is string {
   if (!url) return false;
