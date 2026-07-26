@@ -1,6 +1,11 @@
 import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
-import { DEFAULT_HOST_KEY, defaultRules, isBuiltinHost } from "../lib/defaults";
+import {
+  DEFAULT_HOST_KEY,
+  defaultRules,
+  GOOGLE_SEARCH_MATCHES,
+  isBuiltinHost,
+} from "../lib/defaults";
 import { hostKey, originPattern } from "../lib/host";
 import type { CreateRuleResponse, HazeMessage } from "../lib/messages";
 import {
@@ -37,6 +42,16 @@ export default defineBackground(() => {
     await reRegisterDynamic();
   });
   browser.runtime.onStartup.addListener(reRegisterDynamic);
+
+  // The user can also grant host access straight from the browser's own UI
+  // (e.g. the toolbar icon's "Site access" menu, or "Allow on all sites" in
+  // the extensions manager) without ever going through requestAndRegisterOrigins.
+  // That grants the permission but has no way to tell us to register a content
+  // script for it, so without this listener the site stays permanently
+  // unblurred even though browser.permissions.contains() reports it as granted.
+  browser.permissions.onAdded.addListener((perms) => {
+    registerGrantedOrigins(perms.origins ?? []);
+  });
 
   browser.runtime.onMessage.addListener((message, sender) => {
     const msg = message as HazeMessage;
@@ -102,10 +117,25 @@ async function seedDefaults(): Promise<void> {
   await browser.storage.local.set({ [SEEDED_KEY]: true });
 }
 
-/** Re-register runtime content scripts for previously-granted custom origins. */
+/**
+ * Re-register runtime content scripts for previously-granted custom origins.
+ * Also reconciles against permissions.getAll() (not just our synced list) so
+ * origins granted via the browser's own UI - which never calls back into the
+ * extension - still get their content script registered.
+ */
 async function reRegisterDynamic(): Promise<void> {
-  const origins = await getGrantedOrigins();
-  if (!origins.length) return;
+  const synced = await getGrantedOrigins();
+  const held = await browser.permissions.getAll();
+  const patterns = new Set([...synced, ...(held.origins ?? [])]);
+  if (!patterns.size) return;
+  await registerGrantedOrigins([...patterns]);
+}
+
+/** Register a content script for each pattern the extension actually holds. */
+async function registerGrantedOrigins(patterns: string[]): Promise<void> {
+  // Google Search already has a static host permission + registered script.
+  const custom = patterns.filter((p) => !GOOGLE_SEARCH_MATCHES.includes(p));
+  if (!custom.length) return;
   let registered: { id: string }[] = [];
   try {
     registered = await browser.scripting.getRegisteredContentScripts();
@@ -113,7 +143,9 @@ async function reRegisterDynamic(): Promise<void> {
     /* ignore */
   }
   const existing = new Set(registered.map((r) => r.id));
-  for (const pattern of origins) {
+  for (const pattern of custom) {
+    if (!(await browser.permissions.contains({ origins: [pattern] }))) continue;
+    await addGrantedOrigin(pattern);
     await registerForPattern(pattern, existing);
   }
 }
@@ -149,11 +181,7 @@ async function registerForPattern(
 async function handleRegisterOrigins(
   msg: Extract<HazeMessage, { type: "haze:register-origins" }>,
 ): Promise<{ ok: boolean }> {
-  for (const pattern of msg.patterns) {
-    if (!(await browser.permissions.contains({ origins: [pattern] }))) continue;
-    await addGrantedOrigin(pattern);
-    await registerForPattern(pattern, new Set());
-  }
+  await registerGrantedOrigins(msg.patterns);
   return { ok: true };
 }
 
