@@ -1,7 +1,6 @@
 import { browser } from "wxt/browser";
 import { defineContentScript } from "wxt/utils/define-content-script";
 import { anchorClass, anchorMatches } from "../lib/anchor";
-import { GOOGLE_SEARCH_MATCHES } from "../lib/defaults";
 import {
   ACTIVE_CLASS,
   allSelectorParts,
@@ -11,6 +10,7 @@ import {
   SUPPRESSED_CLASS,
   TEXT_CLASS,
 } from "../lib/css";
+import { GOOGLE_SEARCH_MATCHES } from "../lib/defaults";
 import { hostKey } from "../lib/host";
 import { effectiveRulesFor } from "../lib/rules";
 import { type HazeState, loadState } from "../lib/storage";

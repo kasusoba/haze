@@ -109,10 +109,6 @@ h2 {
   font-family: ui-monospace, monospace;
   color: var(--text);
 }
-.site-off .site-head .name,
-.site-off .site-head .count {
-  opacity: 0.5;
-}
 .site-toggle {
   display: flex;
   align-items: center;
@@ -145,6 +141,10 @@ h2 {
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
+}
+.site-off .site-head .name,
+.site-off .site-head .count {
+  opacity: 0.5;
 }
 .site-body {
   margin-top: 4px;
