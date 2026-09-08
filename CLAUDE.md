@@ -13,6 +13,8 @@ any site. `lib/` holds the logic, `entrypoints/` the extension surfaces.
 | `pnpm compile` | `tsc --noEmit` |
 | `pnpm lint` | Biome |
 
+CI runs all of these on every PR, so run them locally before pushing.
+
 `.output/` is a build artifact and is gitignored. **A source edit is not live in
 the browser until you rebuild**, so after changing anything under `lib/` or
 `entrypoints/`, run a build and reload the unpacked extension before judging
@@ -57,7 +59,9 @@ sequence:
 5. **Push and open a PR.** The title becomes the release-note line, so write it
    for a user reading the release page. Apply exactly one category label:
    `enhancement`, `bug`, `documentation`, or `chore`.
-6. **Merge with `--squash`** so `master` keeps one commit per PR.
+6. **Wait for CI green, then merge with `--squash`** so `master` keeps one
+   commit per PR. `.github/workflows/ci.yml` runs lint, typecheck, and both
+   builds on every PR.
 7. **Tag `v<version>` on `master` and push it** (skip for an unbumped chore).
    That fires
    `.github/workflows/release.yml`, which builds, attaches both store zips, and
