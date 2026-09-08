@@ -13,13 +13,20 @@ const TEST_ATTRS = [
   "name",
 ];
 
-/** Heuristic: does this class look like a hashed / generated name? */
+/**
+ * Heuristic: does this class look like a hashed / generated name?
+ *
+ * Judged per word-run, never by total length. Hand-written design systems ship
+ * long but perfectly stable snake_case/BEM names (`page_charts_section_item_
+ * details_average_num`), and a blanket length cap discarded those along with
+ * the real hashes, leaving the picker no anchor at all on such sites. A hash is
+ * one unbroken random-looking run, so test the runs between separators.
+ */
 export function isHashedClass(cls: string): boolean {
-  if (cls.length > 25) return true;
-  // CSS-modules style: Foo__bar___aB3xY or Foo_bar_aB3
-  if (/[_-][a-z0-9]{5,}$/i.test(cls) && /[A-Z0-9]/.test(cls)) return true;
   // styled-components / emotion: sc-xxxxx, css-1q2w3e
   if (/^(sc-|css-|jsx-|emotion-)/i.test(cls)) return true;
+  // CSS-modules style: Foo__bar___aB3xY or Foo_bar_aB3
+  if (/[_-][a-z0-9]{5,}$/i.test(cls) && /[A-Z0-9]/.test(cls)) return true;
   // long digit runs are usually generated
   if (/\d{4,}/.test(cls)) return true;
   // mostly-random looking token with mixed case + digits, no separators
@@ -30,6 +37,17 @@ export function isHashedClass(cls: string): boolean {
     !/[-_]/.test(cls)
   )
     return true;
+  // CSS-modules build hash after `__`: readable head, then an id mixing a
+  // digit with an uppercase letter (`HomeBanner_metaRating__M_3UA`). A plain
+  // BEM element (`card__title`, `grid__col-2`) has neither, so it survives.
+  const dbl = cls.lastIndexOf("__");
+  if (dbl > 0) {
+    const tail = cls.slice(dbl + 2);
+    if (/\d/.test(tail) && /[A-Z]/.test(tail)) return true;
+  }
+  // One unbroken run longer than any real word is a hash, however short the
+  // class as a whole is.
+  if (/[^-_]{21,}/.test(cls)) return true;
   return false;
 }
 
@@ -242,8 +260,8 @@ export function cssModuleToken(cls: string): string | null {
   return words.pop() ?? null;
 }
 
-/** A `:has()` generalization matching more than this is treated as too broad. */
-const HAS_GENERALIZE_MAX = 400;
+/** A generalized selector matching more than this is treated as too broad. */
+const GENERALIZE_MAX = 400;
 /** Cap descendant scanning so picking a huge container stays responsive. */
 const HAS_SCAN_LIMIT = 250;
 
@@ -327,11 +345,41 @@ function hasGeneralization(el: Element): string | null {
         continue; // :has unsupported or malformed - skip
       }
       const n = matchCount(sel);
-      if (n >= 2 && n <= HAS_GENERALIZE_MAX) return sel;
+      if (n >= 2 && n <= GENERALIZE_MAX) return sel;
     }
     return null;
   };
   return tryPreds(directChildPredicates(el)) ?? tryPreds(descendantPredicates(el));
+}
+
+/** How far up to look for an ancestor that can name a classless element. */
+const PARENT_SCOPE_DEPTH = 3;
+
+/**
+ * Scope an element that has no anchor of its own by its nearest named
+ * ancestor: an <img> star-rating inside `.or_q_rating_date_s` becomes
+ * `.or_q_rating_date_s > img`. Such elements carry nothing to match on yet
+ * repeat once per row - exactly where "all similar" must still generalize
+ * rather than collapse into a single-element `:nth-of-type` path.
+ */
+function parentScoped(el: Element): string | null {
+  const tag = el.tagName.toLowerCase();
+  let cur: Element | null = el.parentElement;
+  let combinator = " > ";
+  for (let i = 0; i < PARENT_SCOPE_DEPTH && cur && cur !== document.body; i++) {
+    const cls = semanticClasses(cur);
+    if (cls.length) {
+      const anchor = cls.map((c) => `.${CSS.escape(c)}`).join("");
+      const sel = `${anchor}${combinator}${tag}`;
+      // `el` matches by construction, so a 0 count can only mean the selector
+      // was rejected by the parser - treat it as unusable and keep walking up.
+      const n = matchCount(sel);
+      if (n >= 1 && n <= GENERALIZE_MAX) return sel;
+    }
+    cur = cur.parentElement;
+    combinator = " "; // past the parent, only a descendant match is possible
+  }
+  return null;
 }
 
 /**
@@ -342,9 +390,11 @@ function hasGeneralization(el: Element): string | null {
  * When the element itself has no shared anchor - a utility-class-only element
  * on a Tailwind site, where `flex`/`col-span-4` are shared with unrelated
  * siblings - we infer a `:has()` selector from a distinctive descendant so a
- * repeated set (review star rows, cards) still generalizes with one pick. Only
- * if that fails too do we fall back to a precise single-element selector; the
- * generated selector is shown in the toolbar, so the user can always tweak it.
+ * repeated set (review star rows, cards) still generalizes with one pick. A
+ * bare leaf with no descendants to infer from (`<b>`, `<img>`) is instead
+ * scoped by its nearest named ancestor. Only if both fail do we fall back to a
+ * precise single-element selector; the generated selector is shown in the
+ * toolbar, so the user can always tweak it.
  */
 export function generalizedSelector(el: Element): string {
   const classes = semanticClasses(el);
@@ -366,7 +416,7 @@ export function generalizedSelector(el: Element): string {
   if (tokens.length) {
     return tokens.map((t) => `[class*="${CSS.escape(t)}"]`).join("");
   }
-  return hasGeneralization(el) ?? generateSelector(el);
+  return hasGeneralization(el) ?? parentScoped(el) ?? generateSelector(el);
 }
 
 /** Selectors for the element and each of its ancestors (for the granularity walk). */

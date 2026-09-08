@@ -1,0 +1,41 @@
+# Publishes a GitHub Release whenever a v* tag is pushed. Notes are generated
+# from the PRs merged since the previous tag (see .github/release.yml for the
+# category mapping), and both store zips are attached as build artifacts.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so the notes can diff against the previous tag.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm compile
+
+      - run: pnpm zip
+
+      - run: pnpm zip:firefox
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes .output/*.zip
