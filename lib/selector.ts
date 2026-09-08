@@ -102,6 +102,7 @@ export function isStateClass(cls: string): boolean {
 }
 
 // Bare atomic-CSS/Tailwind utilities (no value suffix).
+// biome-ignore format: a flat word list reads better packed than one per line.
 const UTILITY_WORDS = new Set([
   "flex", "grid", "block", "inline", "inline-flex", "inline-block",
   "inline-grid", "contents", "hidden", "table", "flow-root", "flex-row",
@@ -349,7 +350,9 @@ function hasGeneralization(el: Element): string | null {
     }
     return null;
   };
-  return tryPreds(directChildPredicates(el)) ?? tryPreds(descendantPredicates(el));
+  return (
+    tryPreds(directChildPredicates(el)) ?? tryPreds(descendantPredicates(el))
+  );
 }
 
 /** How far up to look for an ancestor that can name a classless element. */

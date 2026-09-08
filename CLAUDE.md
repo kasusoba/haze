@@ -46,9 +46,11 @@ sequence:
    allocation in hot paths, and comments that explain *why* rather than restate
    the code. Fix what you find before committing.
 2. **Branch** off `master`: `fix/…`, `feat/…`, or `chore/…`.
-3. **Bump `version` in `package.json`.** Semver against the change, not against
-   the branch prefix: a picker heuristic fix is a patch even when it also adds a
-   new fallback (precedent: v2.3.2, v2.3.3).
+3. **Bump `version` in `package.json`, but only when users get something.**
+   Semver against the change, not against the branch prefix: a picker heuristic
+   fix is a patch even when it also adds a new fallback (precedent: v2.3.2,
+   v2.3.3). A pure chore (tooling, lint, CI) gets no bump and no tag; it merges
+   on its own and rides into the next release's notes under Maintenance.
 4. **Commit** with a sentence-case subject describing the user-visible effect,
    plus a body explaining the cause. No version number in the subject; the tag
    carries it.
@@ -56,7 +58,8 @@ sequence:
    for a user reading the release page. Apply exactly one category label:
    `enhancement`, `bug`, `documentation`, or `chore`.
 6. **Merge with `--squash`** so `master` keeps one commit per PR.
-7. **Tag `v<version>` on `master` and push it.** That fires
+7. **Tag `v<version>` on `master` and push it** (skip for an unbumped chore).
+   That fires
    `.github/workflows/release.yml`, which builds, attaches both store zips, and
    publishes the release with notes generated from the PRs since the last tag.
    `.github/release.yml` maps labels to note headings.
@@ -70,6 +73,7 @@ workflow owns both.
 - Comments explain the reason a rule exists, ideally with the concrete case that
   motivated it. Do not narrate what the next line does.
 - Never use em dashes or en dashes anywhere, including code comments.
-- `pnpm lint` currently reports pre-existing formatting complaints about
-  hand-packed lookup tables in `lib/selector.ts`. Do not reformat them as
-  drive-by work in an unrelated PR.
+- `pnpm lint` is clean. Keep it that way: fix what you introduce in the same
+  PR, and never leave a diff that adds a diagnostic.
+- Deliberate formatting (a hand-packed lookup table, say) is kept with a
+  `// biome-ignore format: <reason>` line, not by leaving the check failing.
