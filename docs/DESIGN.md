@@ -65,18 +65,29 @@ ignores them.
 {
   "globalEnabled": true,
   "siteDisabled": { "example.com": true },   // hostKey -> explicitly off
-  "userRules": {                              // hostKey -> the user's rules
-    "google.com": [
-      { "selector": "g-review-stars, ...", "effect": "blur",
-        "intensity": 15, "reveal": "hover", "enabled": true }
-    ]
-  }
+  "rules:google.com": [                       // one item per site
+    { "selector": "g-review-stars, ...", "effect": "blur",
+      "intensity": 15, "reveal": "hover", "enabled": true }
+  ]
 }
 ```
 
-Rules are keyed by a normalized `hostKey` (see `lib/host.ts`). Granted custom
-origins are tracked in `grantedOrigins` (also in `storage.sync`, so the set of
-sites travels between devices) and re-registered on startup. The host permission
+Rules are keyed by a normalized `hostKey` (see `lib/host.ts`), one storage item
+per site.
+
+> Up to 2.5.3 every site shared a single `userRules` map. Chrome caps one sync
+> item at 8 KB (`QUOTA_BYTES_PER_ITEM`), so around forty rules that map stopped
+> fitting and *every* later write threw "kQuotaBytesPerItem quota exceeded",
+> including the first rule on an untouched site. Splitting the map spends the
+> 8 KB per site and moves the real ceiling to the profile quotas (100 KB,
+> 512 items). `migrateUserRules()` in `lib/storage.ts` splits the old map once
+> on update; `loadState()` still reads it until then, and export/import keep the
+> flat `userRules` map as their file format. A single site that outgrows its own
+> item now raises `RuleQuotaError`, which the picker and the editors show
+> instead of the browser's raw message.
+
+Granted custom origins are tracked in `grantedOrigins` (also in `storage.sync`,
+so the set of sites travels between devices) and re-registered on startup. The host permission
 itself can't sync — the browser requires a user gesture to grant it — so on a
 fresh device only origins that device already has permission for are registered;
 the rest are surfaced as a one-click grant prompt when the options page opens
@@ -185,7 +196,8 @@ separate layer), so it's editable and deletable like anything they create; a
 `defaultsSeeded` flag makes a later deletion stick.
 
 On update, `background.ts` runs one-time migrations: mapping legacy per-site
-toggle keys to the new `hostKey` scheme, and folding legacy effect values
+toggle keys to the new `hostKey` scheme, splitting the pre-2.5.4 single
+`userRules` item into one item per site, and folding legacy effect values
 (scratchcard-only, `both`) into the current set.
 
 ---

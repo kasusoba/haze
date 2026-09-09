@@ -9,6 +9,7 @@ import { missingGrantsFor, requestAndRegisterOrigins } from "../../lib/grants";
 import { hostKey, isInjectableUrl, originPattern } from "../../lib/host";
 import {
   loadState,
+  RuleQuotaError,
   setGlobalEnabled,
   setSiteDisabled,
   setUserRules,
@@ -103,7 +104,16 @@ function Popup() {
 
   const persist = (next: Rule[]) => {
     setRules(next);
-    if (site) setUserRules(site.key, next);
+    if (!site) return;
+    // The row is already redrawn, so a rejected write has to say so rather than
+    // quietly reverting the next time the popup opens.
+    setUserRules(site.key, next).catch((err) => {
+      alert(
+        err instanceof RuleQuotaError
+          ? err.message
+          : `Could not save the rule: ${String(err)}`,
+      );
+    });
   };
   const patchRule = (id: string, patch: RulePatch) =>
     persist(rules.map((r) => (r.id === id ? { ...r, ...patch } : r)));
