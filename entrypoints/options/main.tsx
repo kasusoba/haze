@@ -8,6 +8,8 @@ import { missingGrantsFor, requestAndRegisterOrigins } from "../../lib/grants";
 import {
   type HazeState,
   loadState,
+  RuleQuotaError,
+  replaceAllUserRules,
   setGlobalEnabled,
   setSiteDisabled,
   setUserRules,
@@ -88,6 +90,15 @@ async function exportRules() {
   URL.revokeObjectURL(url);
 }
 
+/** A rule write the UI already rendered failed, so say why instead of silently reverting on reload. */
+function reportWriteFailure(err: unknown) {
+  alert(
+    err instanceof RuleQuotaError
+      ? err.message
+      : `Could not save the rule: ${String(err)}`,
+  );
+}
+
 function Options() {
   const [state, setState] = useState<HazeState | null>(null);
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
@@ -126,7 +137,7 @@ function Options() {
     if (rules.length) userRules[key] = rules;
     else delete userRules[key];
     setState({ ...state, userRules });
-    setUserRules(key, rules);
+    setUserRules(key, rules).catch(reportWriteFailure);
   };
   const patchRule = (key: string, id: string, patch: RulePatch) =>
     persistRules(
@@ -165,13 +176,18 @@ function Options() {
     for (const rules of Object.values(userRules))
       for (const rule of rules) rule.effect = normalizeEffect(rule.effect);
     await browser.storage.sync.set({
-      userRules,
       siteDisabled: data.siteDisabled ?? {},
       ...(typeof data.globalEnabled === "boolean"
         ? { globalEnabled: data.globalEnabled }
         : {}),
     });
+    const rejected = await replaceAllUserRules(userRules);
     setState(await loadState());
+    if (rejected.length) {
+      alert(
+        `These sites have more rules than the browser will sync, so they were not imported: ${rejected.join(", ")}`,
+      );
+    }
 
     // Rules alone don't run: each non-builtin site needs a host permission and
     // a registered content script. Collect the sites that still lack a grant.

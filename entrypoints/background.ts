@@ -14,6 +14,9 @@ import {
   addUserRule,
   getGrantedOrigins,
   loadState,
+  migrateUserRules,
+  RuleQuotaError,
+  setUserRules,
 } from "../lib/storage";
 import { DEFAULT_BG, normalizeEffect, type Rule } from "../lib/types";
 
@@ -36,6 +39,7 @@ const LEGACY_KEYS: Record<string, string> = {
 export default defineBackground(() => {
   browser.runtime.onInstalled.addListener(async () => {
     await migrateLegacy();
+    await migrateUserRules();
     await migrateEffects();
     await migrateGrantedOrigins();
     await seedDefaults();
@@ -84,8 +88,8 @@ async function migrateLegacy(): Promise<void> {
  */
 async function migrateEffects(): Promise<void> {
   const { userRules } = await loadState();
-  let changed = false;
-  for (const rules of Object.values(userRules)) {
+  for (const [key, rules] of Object.entries(userRules)) {
+    let changed = false;
     for (const rule of rules) {
       const effect = normalizeEffect(rule.effect);
       if (effect !== rule.effect) {
@@ -93,8 +97,8 @@ async function migrateEffects(): Promise<void> {
         changed = true;
       }
     }
+    if (changed) await setUserRules(key, rules);
   }
-  if (changed) await browser.storage.sync.set({ userRules });
 }
 
 /**
@@ -208,7 +212,12 @@ async function handleCreateRule(
     label: msg.label,
     enabled: true,
   };
-  await addUserRule(key, rule);
+  try {
+    await addUserRule(key, rule);
+  } catch (err) {
+    if (err instanceof RuleQuotaError) return { ok: false, error: err.message };
+    throw err;
+  }
 
   // Persist a runtime content script for non-builtin sites so it survives reloads.
   // Google Search already has a static host permission + registered script.
