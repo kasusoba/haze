@@ -6,7 +6,7 @@ import { RuleCard } from "../../components/RuleCard";
 import type { RulePatch } from "../../components/RuleEditor";
 import { isBuiltinHost } from "../../lib/defaults";
 import { missingGrantsFor, requestAndRegisterOrigins } from "../../lib/grants";
-import { hostKey, isInjectableUrl, originPattern } from "../../lib/host";
+import { hostKey, isInjectableUrl, originPatternForKey } from "../../lib/host";
 import {
   loadState,
   RuleQuotaError,
@@ -35,7 +35,9 @@ async function activeTab() {
 
 async function launchPicker(site: Site) {
   if (!site.noPrompt) {
-    const pattern = originPattern(site.url);
+    // Same pattern the grant banner checks (lib/grants.ts). Asking for the bare
+    // origin here left the banner asking again right after this prompt.
+    const pattern = originPatternForKey(site.key);
     const has = await browser.permissions.contains({ origins: [pattern] });
     if (!has) {
       const granted = await browser.permissions.request({ origins: [pattern] });

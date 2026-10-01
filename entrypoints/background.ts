@@ -6,7 +6,7 @@ import {
   GOOGLE_SEARCH_MATCHES,
   isBuiltinHost,
 } from "../lib/defaults";
-import { hostKey, originPattern } from "../lib/host";
+import { hostKey, originPatternForKey } from "../lib/host";
 import type { CreateRuleResponse, HazeMessage } from "../lib/messages";
 import {
   addGrantedOrigin,
@@ -222,7 +222,7 @@ async function handleCreateRule(
   // Persist a runtime content script for non-builtin sites so it survives reloads.
   // Google Search already has a static host permission + registered script.
   if (!isBuiltinHost(hostname)) {
-    const pattern = originPattern(url);
+    const pattern = originPatternForKey(key);
     await addGrantedOrigin(pattern);
     await registerForPattern(pattern, new Set());
   }
