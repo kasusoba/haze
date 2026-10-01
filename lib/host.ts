@@ -12,12 +12,6 @@ export function hostMatchesSuffix(hostname: string, suffix: string): boolean {
   return h === s || h.endsWith(`.${s}`);
 }
 
-/** Origin match pattern for an arbitrary site, e.g. https://example.com/* */
-export function originPattern(url: string): string {
-  const u = new URL(url);
-  return `${u.protocol}//${u.hostname}/*`;
-}
-
 /** Match pattern covering a hostKey and its subdomains, e.g. *://*.imdb.com/* */
 export function originPatternForKey(key: string): string {
   return `*://*.${key}/*`;
