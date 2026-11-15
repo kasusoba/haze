@@ -138,12 +138,32 @@ export function isUtilityClass(cls: string): boolean {
 }
 
 /**
+ * Polymer (YouTube, YouTube Music) stamps `style-scope <host-tag>` on every
+ * node a component renders, so those classes name the component, not the
+ * element: `.style-scope.ytmusic-responsive-list-item-renderer` matched every
+ * cell of every song row.
+ */
+function isScopeClass(cls: string, el: Element): boolean {
+  if (cls === "style-scope") return true;
+  if (!cls.includes("-")) return false;
+  try {
+    return el.parentElement?.closest(cls) != null;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Classes usable as a meaningful anchor: not hashed, not transient state, and
  * not a shared layout utility. These are the ones worth putting in a selector.
  */
 function semanticClasses(el: Element): string[] {
   return Array.from(el.classList).filter(
-    (c) => !isHashedClass(c) && !isStateClass(c) && !isUtilityClass(c),
+    (c) =>
+      !isHashedClass(c) &&
+      !isStateClass(c) &&
+      !isUtilityClass(c) &&
+      !isScopeClass(c, el),
   );
 }
 
@@ -273,6 +293,7 @@ function tagWithClasses(el: Element, keepUtility: boolean): string {
     (c) =>
       !isHashedClass(c) &&
       !isStateClass(c) &&
+      !isScopeClass(c, el) &&
       (keepUtility || !isUtilityClass(c)),
   );
   return cls.length ? `${tag}.${cls.map((c) => CSS.escape(c)).join(".")}` : tag;
@@ -400,6 +421,49 @@ function parentScoped(el: Element): string | null {
  * toolbar, so the user can always tweak it.
  */
 export function generalizedSelector(el: Element): string {
+  return pinColumn(el, broadSelector(el));
+}
+
+/**
+ * Narrow `sel` to `el`'s column when the row it sits in repeats the same cell
+ * shape side by side. YouTube Music song rows hold artist, plays, and album as
+ * three identical `div.flex-column` cells, so "all similar" on the play count
+ * blurred the artist too; only position tells them apart. Pinned only when
+ * every row on the page has the same number of such cells (a fixed layout, so
+ * the index means the same column everywhere) and the cell holds no media,
+ * which keeps a grid of image cards generalizing to all cards.
+ */
+function pinColumn(el: Element, sel: string): string {
+  let a: Element = el;
+  for (let k = 0; k < PARENT_SCOPE_DEPTH; k++) {
+    const row = a.parentElement;
+    if (!row || row === document.body) break;
+    const rival = Array.from(row.children).some(
+      (c) => c !== a && (c.matches(sel) || c.querySelector(sel) !== null),
+    );
+    if (rival) {
+      if (a.querySelector("img, picture, video, svg, canvas")) return sel;
+      const colSel = segmentFor(a);
+      const perRow = new Map<Element | null, number>();
+      for (const c of Array.from(document.querySelectorAll(colSel))) {
+        const r = c.parentElement;
+        // SPAs keep the previous page hidden in the DOM: artist-page rows (3
+        // cells) linger behind a YouTube Music album page (2 cells).
+        if (r?.checkVisibility?.() === false) continue;
+        perRow.set(r, (perRow.get(r) ?? 0) + 1);
+      }
+      if (new Set(perRow.values()).size !== 1) return sel;
+      const nth = `:nth-of-type(${nthOfType(a)})`;
+      if (a === el) return `${sel}${nth}`;
+      // :is() keeps a complex `sel` (`.a > b`) matching against the whole tree.
+      return `${colSel}${nth} ${/[ >]/.test(sel) ? `:is(${sel})` : sel}`;
+    }
+    a = row;
+  }
+  return sel;
+}
+
+function broadSelector(el: Element): string {
   const classes = semanticClasses(el);
   if (classes.length) return classes.map((c) => `.${CSS.escape(c)}`).join("");
   for (const attr of TEST_ATTRS) {

@@ -437,10 +437,27 @@ function startPicker(onClose: () => void): void {
     if (!token) return null;
     // Numbers generalize so sibling rows (other ratings/counts) match too;
     // words match literally. Both stay user-editable in the field.
-    const core = tok.numeric ? "[0-9][0-9.,]*" : escapeRe(token);
+    let after = text.slice(tok.end);
+    // A magnitude suffix glued to the number (`2.1m views`, `1.2bn plays`) is
+    // part of the metric: left out, the blur leaks the "m" and the anchor
+    // becomes `(?=m)`, which misses every `450k views` on YouTube Music. The
+    // suffix stays optional so picking `478 views` still catches `34m views`.
+    const unit = tok.numeric
+      ? (after.match(/^[A-Za-z]{1,3}\b/)?.[0] ?? "")
+      : "";
+    after = after.slice(unit.length);
+    // A picked year stays a year, so an artist named `Wijaya 80` is spared.
+    const num = /^(19|20)[0-9]{2}$/.test(token)
+      ? "(?:19|20)[0-9]{2}"
+      : "[0-9][0-9.,]*[A-Za-z]{0,3}";
+    // The lookbehind stops a match starting mid-token: a year pick's
+    // `[0-9]+(?=\s*$)` otherwise blurred the "41" of every `2:41` duration
+    // and the "777" of handles like `@carmens_music777`.
+    const core = tok.numeric
+      ? `(?<![0-9A-Za-z_]|[0-9][:.,])${num}`
+      : escapeRe(token);
     // Anchor by what immediately follows the pick, so a look-alike number
     // elsewhere on the line (e.g. a publish year vs a page count) is spared.
-    const after = text.slice(tok.end);
     if (/^\s*$/.test(after)) return `${core}(?=\\s*$)`;
     const m = after.match(/^\s*([^\s0-9][^\s]*)/);
     if (m?.[1]) return `${core}(?=\\s*${escapeRe(m[1])})`;
